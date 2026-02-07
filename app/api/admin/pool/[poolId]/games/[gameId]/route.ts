@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
 import { getDb } from '@/lib/db';
+import { isPoolLocked } from '@/lib/pool-lock';
 import {
   isValidRoundKey,
   isValidStatus,
@@ -19,6 +20,11 @@ export async function PATCH(
 ) {
   const unauthorized = requireAdmin(request);
   if (unauthorized) return unauthorized;
+
+  const db = getDb();
+  if (await isPoolLocked(db, params.poolId)) {
+    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+  }
 
   const body = await request.json();
 
@@ -77,7 +83,6 @@ export async function PATCH(
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
-  const db = getDb();
   try {
     const game = await updateGame(db, params.poolId, params.gameId, updates);
     return NextResponse.json({ game });
@@ -94,6 +99,10 @@ export async function DELETE(
   if (unauthorized) return unauthorized;
 
   const db = getDb();
+  if (await isPoolLocked(db, params.poolId)) {
+    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+  }
+
   await deleteGame(db, params.poolId, params.gameId);
   return NextResponse.json({ deleted: true });
 }
