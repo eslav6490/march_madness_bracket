@@ -141,6 +141,45 @@ describe('FEAT-006 game finalization', () => {
     expect(result.payout_amount_cents).toBe(newerAmount);
   });
 
+  it('recomputes an existing game_result when final scores are corrected', async () => {
+    const poolId = await createPoolWithSquares(db, 'Score Correction Pool');
+
+    await upsertDigitMap(db, poolId, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    await revealDigitMap(db, poolId);
+    await lockPool(db, poolId);
+
+    const originalWinner = await createParticipant(db, poolId, 'Original Winner');
+    const correctedWinner = await createParticipant(db, poolId, 'Corrected Winner');
+    await assignSquare(db, poolId, 1, 9, originalWinner.id); // 81-79 -> 1,9
+    await assignSquare(db, poolId, 3, 1, correctedWinner.id); // 83-71 -> 3,1
+
+    const game = await createGame(db, poolId, {
+      round_key: 'round_of_64',
+      team_a: 'A',
+      team_b: 'B',
+      status: 'final',
+      score_a: 81,
+      score_b: 79,
+      start_time: null
+    });
+
+    const first = await finalizeGame(db, poolId, game.id);
+    expect(first.win_digit).toBe(1);
+    expect(first.lose_digit).toBe(9);
+    expect(first.winning_participant_id).toBe(originalWinner.id);
+
+    await db.query('update games set score_a = $1, score_b = $2 where id = $3', [83, 71, game.id]);
+
+    const recomputed = await finalizeGame(db, poolId, game.id);
+    expect(recomputed.id).toBe(first.id);
+    expect(recomputed.win_digit).toBe(3);
+    expect(recomputed.lose_digit).toBe(1);
+    expect(recomputed.winning_participant_id).toBe(correctedWinner.id);
+
+    const rows = await db.query('select * from game_results where pool_id = $1 and game_id = $2', [poolId, game.id]);
+    expect(rows.rows).toHaveLength(1);
+  });
+
   it('blocks finalization when game is not final', async () => {
     const poolId = await createPoolWithSquares(db, 'Not Final Pool');
 
