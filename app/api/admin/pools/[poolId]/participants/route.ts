@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getDb } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin';
+import { isPoolLocked } from '@/lib/pool-lock';
 import { createParticipant, listParticipants } from '@/lib/participants';
 
 export async function GET(request: Request, { params }: { params: { poolId: string } }) {
@@ -17,6 +18,11 @@ export async function POST(request: Request, { params }: { params: { poolId: str
   const unauthorized = requireAdmin(request);
   if (unauthorized) return unauthorized;
 
+  const db = getDb();
+  if (await isPoolLocked(db, params.poolId)) {
+    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+  }
+
   const body = await request.json();
   const displayName = typeof body.display_name === 'string' ? body.display_name.trim() : '';
   const contactInfo = typeof body.contact_info === 'string' ? body.contact_info.trim() : null;
@@ -25,7 +31,6 @@ export async function POST(request: Request, { params }: { params: { poolId: str
     return NextResponse.json({ error: 'display_name is required' }, { status: 400 });
   }
 
-  const db = getDb();
   const participant = await createParticipant(db, params.poolId, displayName, contactInfo);
   return NextResponse.json({ participant });
 }

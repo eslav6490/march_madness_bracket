@@ -3,7 +3,7 @@
 Last updated: 2026-02-07
 
 ## Summary
-- Current working branch: `feat-007-public-results-ui`
+- Current working branch: `feat-010-lock-enforcement`
 - Stack: Next.js + Postgres
 - Admin access: `ADMIN_TOKEN` header guard only (no Supabase auth yet)
 
@@ -27,7 +27,7 @@ Last updated: 2026-02-07
 - FEAT-007 Public Results View: Done (read-only page consuming results API)
 - FEAT-008 Square Heatmap: Not started
 - FEAT-009 Participant Leaderboard: Not started
-- FEAT-010 Pool Locking: Not started (only minimal lock endpoint for digits)
+- FEAT-010 Pool Locking: Done (write endpoints blocked after lock; prerequisites not enforced yet)
 - FEAT-011 Audit Log: Not started
 - FEAT-012 Export Grid and Results: Not started
 - FEAT-013 Score API Ingestion: Not started

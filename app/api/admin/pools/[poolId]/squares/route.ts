@@ -2,11 +2,17 @@ import { NextResponse } from 'next/server';
 
 import { getDb } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin';
+import { isPoolLocked } from '@/lib/pool-lock';
 import { assignSquare } from '@/lib/squares';
 
 export async function PATCH(request: Request, { params }: { params: { poolId: string } }) {
   const unauthorized = requireAdmin(request);
   if (unauthorized) return unauthorized;
+
+  const db = getDb();
+  if (await isPoolLocked(db, params.poolId)) {
+    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+  }
 
   const body = await request.json();
   const rowIndex = Number(body.row_index);
@@ -21,7 +27,6 @@ export async function PATCH(request: Request, { params }: { params: { poolId: st
     return NextResponse.json({ error: 'row_index and col_index must be between 0 and 9' }, { status: 400 });
   }
 
-  const db = getDb();
   try {
     const square = await assignSquare(db, params.poolId, rowIndex, colIndex, participantId);
     return NextResponse.json({ square });

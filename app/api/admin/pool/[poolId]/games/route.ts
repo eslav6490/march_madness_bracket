@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
 import { getDb } from '@/lib/db';
+import { isPoolLocked } from '@/lib/pool-lock';
 import { createGame, isValidRoundKey, isValidStatus, listGames, parseScore, parseStartTime } from '@/lib/games';
 
 export async function GET(request: Request, { params }: { params: { poolId: string } }) {
@@ -16,6 +17,11 @@ export async function GET(request: Request, { params }: { params: { poolId: stri
 export async function POST(request: Request, { params }: { params: { poolId: string } }) {
   const unauthorized = requireAdmin(request);
   if (unauthorized) return unauthorized;
+
+  const db = getDb();
+  if (await isPoolLocked(db, params.poolId)) {
+    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+  }
 
   const body = await request.json();
   const roundKey = typeof body.round_key === 'string' ? body.round_key : '';
@@ -45,7 +51,6 @@ export async function POST(request: Request, { params }: { params: { poolId: str
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
-  const db = getDb();
   const game = await createGame(db, params.poolId, {
     round_key: roundKey,
     team_a: teamA,
