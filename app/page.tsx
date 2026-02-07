@@ -22,6 +22,17 @@ export default async function HomePage() {
         <span className="badge">Public Grid</span>
         <h1>{pool.name}</h1>
         <p>Pool ID: {pool.id}</p>
+        <div className="actions">
+          <a className="button-link button-secondary" href="/payouts">
+            Payouts
+          </a>
+          <a className="button-link button-secondary" href={`/pool/${pool.id}/results`}>
+            Results
+          </a>
+          <a className="button-link button-secondary" href={`/pool/${pool.id}/analytics`}>
+            Analytics
+          </a>
+        </div>
       </header>
       <section className="grid grid--with-headers">
         <div className="cell cell--header"></div>

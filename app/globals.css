@@ -149,6 +149,29 @@ button:hover {
   opacity: 0.9;
 }
 
+.button-link {
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: white;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.button-link:hover {
+  opacity: 0.9;
+}
+
+.button-link.button-secondary {
+  background: transparent;
+  color: var(--accent);
+}
+
 .table {
   display: flex;
   flex-direction: column;
@@ -202,6 +225,47 @@ button:hover {
   color: var(--muted);
 }
 
+.button-secondary {
+  background: transparent;
+  color: var(--accent);
+}
+
+.analytics-toggle {
+  align-items: center;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(52px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.heatmap-cell {
+  border: 1px solid var(--cell-border);
+  border-radius: 10px;
+  padding: 10px 8px;
+  min-height: 58px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.04);
+}
+
+.heatmap-cell strong {
+  color: var(--text);
+}
+
+.heatmap-owner {
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-height: 1rem;
+}
+
 @media (max-width: 900px) {
   main {
     padding: 32px 18px 60px;
@@ -213,5 +277,10 @@ button:hover {
 
   .grid--with-headers {
     grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .heatmap-grid {
+    grid-template-columns: repeat(10, minmax(44px, 1fr));
+    gap: 6px;
   }
 }
