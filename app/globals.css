@@ -173,6 +173,12 @@ button:hover {
   gap: 8px;
 }
 
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .actions button {
   background: transparent;
   color: var(--accent);
