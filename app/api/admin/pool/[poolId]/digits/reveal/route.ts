@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { getDb } from '@/lib/db';
 import { getDigitMap, revealDigitMap } from '@/lib/digits';
 
@@ -15,5 +16,13 @@ export async function POST(request: Request, { params }: { params: { poolId: str
   }
 
   const digitMap = await revealDigitMap(db, params.poolId);
+  await logAuditEvent(db, {
+    pool_id: params.poolId,
+    actor: 'admin',
+    action: 'digits_reveal',
+    entity_type: 'digit_map',
+    entity_id: params.poolId,
+    metadata: {}
+  });
   return NextResponse.json({ digit_map: digitMap });
 }

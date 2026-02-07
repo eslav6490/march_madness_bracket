@@ -71,6 +71,17 @@ export type SquareRow = {
   created_at: Date;
 };
 
+export type AuditEventRow = {
+  id: string;
+  pool_id: string | null;
+  actor: string;
+  action: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  metadata: any;
+  created_at: Date;
+};
+
 export type PoolWithSquares = {
   pool: PoolRow;
   squares: SquareRow[];

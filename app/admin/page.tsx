@@ -373,6 +373,18 @@ export default function AdminPage() {
         )}
       </section>
 
+      {pool && (
+        <section className="panel">
+          <h2>Audit Log</h2>
+          <p className="hint">View recent admin actions for this pool.</p>
+          <div className="form-row">
+            <a className="button-link" href={`/admin/pool/${pool.id}/audit`}>
+              View Audit
+            </a>
+          </div>
+        </section>
+      )}
+
       <section className="panel">
         <h2>Grid</h2>
         <p>Filled squares: {filledCount} / 100</p>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getDb } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { isPoolLocked } from '@/lib/pool-lock';
 import { deleteParticipant, updateParticipant } from '@/lib/participants';
 
@@ -29,6 +30,14 @@ export async function PATCH(request: Request, { params }: { params: { participan
 
   try {
     const participant = await updateParticipant(db, params.participantId, displayName, contactInfo);
+    await logAuditEvent(db, {
+      pool_id: poolId,
+      actor: 'admin',
+      action: 'participant_update',
+      entity_type: 'participant',
+      entity_id: participant.id,
+      metadata: { display_name: participant.display_name }
+    });
     return NextResponse.json({ participant });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 404 });
@@ -56,6 +65,15 @@ export async function DELETE(request: Request, { params }: { params: { participa
   if (!result.deleted) {
     return NextResponse.json({ error: 'participant_has_squares', ownedSquares: result.ownedSquares }, { status: 409 });
   }
+
+  await logAuditEvent(db, {
+    pool_id: poolId,
+    actor: 'admin',
+    action: 'participant_delete',
+    entity_type: 'participant',
+    entity_id: params.participantId,
+    metadata: { force, owned_squares: result.ownedSquares }
+  });
 
   return NextResponse.json({ deleted: true, ownedSquares: result.ownedSquares });
 }

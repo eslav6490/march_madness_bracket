@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getDb } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { isPoolLocked } from '@/lib/pool-lock';
 import { createParticipant, listParticipants } from '@/lib/participants';
 
@@ -32,5 +33,13 @@ export async function POST(request: Request, { params }: { params: { poolId: str
   }
 
   const participant = await createParticipant(db, params.poolId, displayName, contactInfo);
+  await logAuditEvent(db, {
+    pool_id: params.poolId,
+    actor: 'admin',
+    action: 'participant_create',
+    entity_type: 'participant',
+    entity_id: participant.id,
+    metadata: { display_name: participant.display_name }
+  });
   return NextResponse.json({ participant });
 }
