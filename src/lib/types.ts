@@ -26,6 +26,15 @@ export type ParticipantRow = {
   square_count?: number;
 };
 
+export type DigitMapRow = {
+  pool_id: string;
+  winning_digits: number[];
+  losing_digits: number[];
+  revealed_at: Date | null;
+  locked_at: Date | null;
+  created_at: Date | null;
+};
+
 export type SquareRow = {
   id: string;
   pool_id: string;

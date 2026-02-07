@@ -51,6 +51,14 @@ p {
   gap: 8px;
 }
 
+.grid--with-headers {
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+}
+
+.grid-row {
+  display: contents;
+}
+
 .cell {
   background: var(--cell);
   border: 1px solid var(--cell-border);
@@ -64,6 +72,12 @@ p {
   text-align: left;
   border: 1px solid var(--cell-border);
   transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.cell--header {
+  background: rgba(255, 255, 255, 0.75);
+  align-items: center;
+  text-align: center;
 }
 
 .cell--active {
@@ -171,6 +185,12 @@ button:hover {
   border: 1px solid var(--cell-border);
 }
 
+.digit-map {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .hint {
   font-size: 0.9rem;
   color: var(--muted);
@@ -183,5 +203,9 @@ button:hover {
 
   .grid {
     grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .grid--with-headers {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
