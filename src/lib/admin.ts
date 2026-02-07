@@ -8,7 +8,7 @@ export function requireAdmin(request: Request) {
 
   const headerToken = request.headers.get('x-admin-token');
   if (headerToken !== adminToken) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   return null;

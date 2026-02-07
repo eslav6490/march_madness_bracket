@@ -9,7 +9,7 @@ describe('admin guard', () => {
     const request = new Request('http://localhost/api/admin/test');
 
     const response = requireAdmin(request);
-    expect(response?.status).toBe(401);
+    expect(response?.status).toBe(403);
   });
 
   it('allows requests with the admin token', async () => {
