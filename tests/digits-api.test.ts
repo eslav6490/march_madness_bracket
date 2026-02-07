@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPoolWithSquares } from '@/lib/pools';
+import { createParticipant } from '@/lib/participants';
 import { createTestDb } from './helpers/db';
 import { generatePermutation, isValidPermutation, lockDigitMap, revealDigitMap, upsertDigitMap } from '@/lib/digits';
 
@@ -77,6 +78,8 @@ describe('digit admin API', () => {
   it('lock is idempotent', async () => {
     const poolId = await createPoolWithSquares(db, 'Lock Pool');
     await upsertDigitMap(db, poolId, generatePermutation(), generatePermutation());
+    const participant = await createParticipant(db, poolId, 'Assignee');
+    await db.query('update squares set participant_id = $1 where pool_id = $2', [participant.id, poolId]);
 
     vi.doMock('@/lib/db', () => ({ getDb: () => db }));
     const { POST } = await import('../app/api/admin/pool/[poolId]/lock/route');
