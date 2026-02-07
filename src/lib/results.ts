@@ -9,6 +9,7 @@ export type PoolResultRow = GameResultRow & {
   team_b: string;
   score_a: number | null;
   score_b: number | null;
+  status: string;
   winning_participant_name: string | null;
 };
 
@@ -172,7 +173,7 @@ export async function listPoolResults(db: DbClient, poolId: string): Promise<Poo
   const result = await db.query(
     `select gr.id, gr.pool_id, gr.game_id, gr.win_digit, gr.lose_digit, gr.winning_square_id, gr.winning_participant_id,
             gr.payout_amount_cents, gr.finalized_at,
-            g.round_key, g.team_a, g.team_b, g.score_a, g.score_b,
+            g.round_key, g.team_a, g.team_b, g.score_a, g.score_b, g.status,
             p.display_name as winning_participant_name
        from game_results gr
        join games g on g.id = gr.game_id
@@ -189,6 +190,7 @@ export async function listPoolResults(db: DbClient, poolId: string): Promise<Poo
     team_b: String(row.team_b),
     score_a: row.score_a === null ? null : Number(row.score_a),
     score_b: row.score_b === null ? null : Number(row.score_b),
+    status: String(row.status),
     winning_participant_name: row.winning_participant_name ? String(row.winning_participant_name) : null
   }));
 }
