@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 
+import { seedDefaultPayouts } from './payouts';
 import type { DbClient, DbPool, PoolWithSquares } from './types';
 
 const GRID_SIZE = 10;
@@ -87,8 +88,10 @@ async function insertPoolAndSquares(db: DbClient, poolId: string, name: string) 
     }
   }
 
-  await db.query(
-    `insert into squares (id, pool_id, row_index, col_index) values ${values.join(', ')}`,
-    params
-  );
+    await db.query(
+      `insert into squares (id, pool_id, row_index, col_index) values ${values.join(', ')}`,
+      params
+    );
+
+    await seedDefaultPayouts(db, poolId);
 }
