@@ -30,6 +30,10 @@ describe('FEAT-011 audit log', () => {
     // Lock requires digit map.
     await upsertDigitMap(db, poolId, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
+    // FEAT-010 prerequisites: participants exist and all 100 squares assigned before locking.
+    const participant = await createParticipant(db, poolId, 'Winner');
+    await db.query('update squares set participant_id = $1 where pool_id = $2', [participant.id, poolId]);
+
     vi.doMock('@/lib/db', () => ({ getDb: () => db }));
 
     const payoutsRoute = await import('../app/api/admin/pool/[poolId]/payouts/route');
@@ -56,11 +60,6 @@ describe('FEAT-011 audit log', () => {
     expect(lockResponse.status).toBe(200);
 
     // Finalize requires pool locked and digits visible. Locking sets digit_map.locked_at.
-    const participant = await createParticipant(db, poolId, 'Winner');
-    await db.query('update squares set participant_id = $1 where pool_id = $2 and row_index = 1 and col_index = 1', [
-      participant.id,
-      poolId
-    ]);
     const game = await createGame(db, poolId, {
       round_key: 'round_of_64',
       team_a: 'A',
