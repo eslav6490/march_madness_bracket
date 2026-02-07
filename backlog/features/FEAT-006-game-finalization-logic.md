@@ -16,8 +16,9 @@ Compute winning digits, resolve square owner, and snapshot payout when a game be
 
 ## Rules
 
-- Block if digits not revealed or pool not locked
+- Block unless digits are revealed and pool is locked
 - Block if scores missing
+- Throw an error if a tie score is detected
 - Idempotent via unique constraint
 
 ## Acceptance Criteria
@@ -25,6 +26,7 @@ Compute winning digits, resolve square owner, and snapshot payout when a game be
 - No duplicate payouts
 - Correct square resolution
 - Stores payout snapshot
+- Tie score cannot be finalized
 
 ## Dependencies
 

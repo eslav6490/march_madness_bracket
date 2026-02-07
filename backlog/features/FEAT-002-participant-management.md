@@ -16,19 +16,20 @@ So that I can assign squares accurately and track winnings.
 - Edit display name
 - Optional contact info (admin-only)
 - List participants per pool
-- Prevent delete if participant owns squares (or require confirmation with unassign)
+- Delete requires explicit unassign confirmation if participant owns squares
 
 ## UI Requirements
 
 - Admin participants table
 - Create/edit modal
 - Show square count per participant
+- Confirm + unassign flow before delete when owned squares exist
 
 ## Acceptance Criteria
 
 - Participant can be created and edited
 - Participant can own multiple squares
-- Delete is blocked or confirmed if squares exist
+- Delete is allowed only after explicit unassign confirmation if squares exist
 
 ## Dependencies
 

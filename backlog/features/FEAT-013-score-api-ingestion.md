@@ -8,10 +8,14 @@ Fetch games and scores from external provider and update DB.
 
 - Poll endpoint on schedule
 - Upsert by external_id
-- Update scores/status
-- Trigger finalize when final
+- Update scores/status from API source
+- Support game-level override flag
+- Persist both API values and admin override values when override exists
+- If override exists, admin can select which source is authoritative
+- Trigger finalize when final if override is not active
 
 ## Acceptance Criteria
 
 - Idempotent updates
-- Admin override blocks further updates for that game
+- Override behavior works at game level
+- Admin can switch authoritative source when override exists
