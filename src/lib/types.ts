@@ -49,6 +49,18 @@ export type GameRow = {
   updated_at: Date;
 };
 
+export type GameResultRow = {
+  id: string;
+  pool_id: string;
+  game_id: string;
+  win_digit: number;
+  lose_digit: number;
+  winning_square_id: string;
+  winning_participant_id: string | null;
+  payout_amount_cents: number;
+  finalized_at: Date;
+};
+
 export type SquareRow = {
   id: string;
   pool_id: string;
