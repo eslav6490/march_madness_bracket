@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { getDb } from '@/lib/db';
 import { isPoolLocked } from '@/lib/pool-lock';
 import {
@@ -85,6 +86,16 @@ export async function PATCH(
 
   try {
     const game = await updateGame(db, params.poolId, params.gameId, updates);
+    await logAuditEvent(db, {
+      pool_id: params.poolId,
+      actor: 'admin',
+      action: 'game_update',
+      entity_type: 'game',
+      entity_id: game.id,
+      metadata: {
+        updated_fields: Object.keys(updates).sort()
+      }
+    });
     return NextResponse.json({ game });
   } catch (error) {
     return NextResponse.json({ error: (error as Error).message }, { status: 404 });
@@ -104,5 +115,13 @@ export async function DELETE(
   }
 
   await deleteGame(db, params.poolId, params.gameId);
+  await logAuditEvent(db, {
+    pool_id: params.poolId,
+    actor: 'admin',
+    action: 'game_delete',
+    entity_type: 'game',
+    entity_id: params.gameId,
+    metadata: {}
+  });
   return NextResponse.json({ deleted: true });
 }

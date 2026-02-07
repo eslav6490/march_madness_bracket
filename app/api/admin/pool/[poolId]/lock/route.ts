@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { getDb } from '@/lib/db';
 import { lockDigitMap } from '@/lib/digits';
 import { checkPoolLockPrerequisites } from '@/lib/pool-lock';
@@ -15,10 +16,10 @@ export async function POST(request: Request, { params }: { params: { poolId: str
   if (poolResult.rows.length === 0) {
     return NextResponse.json({ error: 'pool_not_found' }, { status: 404 });
   }
-  const status = String(poolResult.rows[0]?.status ?? '');
+  const statusBefore = String(poolResult.rows[0]?.status ?? '');
 
   // Preserve idempotency: if already locked, return 200 and ensure digit map is locked.
-  if (status !== 'locked') {
+  if (statusBefore !== 'locked') {
     const prereqs = await checkPoolLockPrerequisites(db, params.poolId);
     if (!prereqs.ok) {
       return NextResponse.json(
@@ -35,6 +36,16 @@ export async function POST(request: Request, { params }: { params: { poolId: str
 
   try {
     const digitMap = await lockPool(db, params.poolId);
+    if (statusBefore !== 'locked') {
+      await logAuditEvent(db, {
+        pool_id: params.poolId,
+        actor: 'admin',
+        action: 'pool_lock',
+        entity_type: 'pool',
+        entity_id: params.poolId,
+        metadata: { status_before: statusBefore }
+      });
+    }
     return NextResponse.json({ digit_map: digitMap });
   } catch (error) {
     const message = (error as Error).message;

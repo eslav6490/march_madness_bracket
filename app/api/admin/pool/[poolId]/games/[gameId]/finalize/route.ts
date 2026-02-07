@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { getDb } from '@/lib/db';
 import { finalizeGame } from '@/lib/results';
 
@@ -14,6 +15,18 @@ export async function POST(
   const db = getDb();
   try {
     const gameResult = await finalizeGame(db, params.poolId, params.gameId);
+    await logAuditEvent(db, {
+      pool_id: params.poolId,
+      actor: 'admin',
+      action: 'game_finalize',
+      entity_type: 'game_result',
+      entity_id: gameResult.id,
+      metadata: {
+        game_id: params.gameId,
+        winning_participant_id: gameResult.winning_participant_id,
+        payout_amount_cents: gameResult.payout_amount_cents
+      }
+    });
     return NextResponse.json({ game_result: gameResult });
   } catch (error) {
     const message = (error as Error).message;
@@ -40,4 +53,3 @@ function errorStatus(code: string): number {
       return 500;
   }
 }
-

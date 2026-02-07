@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 
 import { requireAdmin } from '@/lib/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { getDb } from '@/lib/db';
 import { isPoolLocked } from '@/lib/pool-lock';
 import { getLatestPayouts, ROUND_KEYS, validatePayoutPayload } from '@/lib/payouts';
@@ -53,6 +54,15 @@ export async function POST(request: Request, { params }: { params: { poolId: str
      values ${values.join(', ')}`,
     paramsList
   );
+
+  await logAuditEvent(db, {
+    pool_id: params.poolId,
+    actor: 'admin',
+    action: 'payouts_update',
+    entity_type: 'payout_config',
+    entity_id: params.poolId,
+    metadata: { payout_amounts_cents: payouts }
+  });
 
   const data = await getLatestPayouts(db, params.poolId);
   return NextResponse.json(data);

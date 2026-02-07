@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
+import { logAuditEvent } from '@/lib/audit';
 import { getDb } from '@/lib/db';
 import { isPoolLocked } from '@/lib/pool-lock';
 import { createGame, isValidRoundKey, isValidStatus, listGames, parseScore, parseStartTime } from '@/lib/games';
@@ -60,6 +61,20 @@ export async function POST(request: Request, { params }: { params: { poolId: str
     score_b: scoreB,
     start_time: startTime,
     external_id: body.external_id ?? null
+  });
+
+  await logAuditEvent(db, {
+    pool_id: params.poolId,
+    actor: 'admin',
+    action: 'game_create',
+    entity_type: 'game',
+    entity_id: game.id,
+    metadata: {
+      round_key: game.round_key,
+      team_a: game.team_a,
+      team_b: game.team_b,
+      status: game.status
+    }
   });
 
   return NextResponse.json({ game });
