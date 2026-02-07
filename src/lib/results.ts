@@ -53,9 +53,6 @@ export async function finalizeGame(db: DbClient, poolId: string, gameId: string)
 }
 
 async function finalizeGameWithClient(db: DbClient, poolId: string, gameId: string): Promise<GameResultRow> {
-  const existing = await getExistingResult(db, poolId, gameId);
-  if (existing) return existing;
-
   const poolRow = await db.query('select status from pools where id = $1', [poolId]);
   if (poolRow.rows.length === 0) {
     throw new Error('pool_not_found');
@@ -142,7 +139,13 @@ async function finalizeGameWithClient(db: DbClient, poolId: string, gameId: stri
     `insert into game_results
        (id, pool_id, game_id, win_digit, lose_digit, winning_square_id, winning_participant_id, payout_amount_cents)
      values ($1, $2, $3, $4, $5, $6, $7, $8)
-     on conflict (pool_id, game_id) do nothing
+     on conflict (pool_id, game_id) do update
+       set win_digit = excluded.win_digit,
+           lose_digit = excluded.lose_digit,
+           winning_square_id = excluded.winning_square_id,
+           winning_participant_id = excluded.winning_participant_id,
+           payout_amount_cents = excluded.payout_amount_cents,
+           finalized_at = now()
      returning id, pool_id, game_id, win_digit, lose_digit, winning_square_id, winning_participant_id,
                payout_amount_cents, finalized_at`,
     [
@@ -157,15 +160,11 @@ async function finalizeGameWithClient(db: DbClient, poolId: string, gameId: stri
     ]
   );
 
-  if (insert.rows.length > 0) {
-    return mapGameResult(insert.rows[0]);
-  }
-
-  const afterConflict = await getExistingResult(db, poolId, gameId);
-  if (!afterConflict) {
+  if (insert.rows.length === 0) {
     throw new Error('finalize_failed');
   }
-  return afterConflict;
+
+  return mapGameResult(insert.rows[0]);
 }
 
 export async function listPoolResults(db: DbClient, poolId: string): Promise<PoolResultRow[]> {
