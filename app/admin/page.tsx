@@ -22,6 +22,13 @@ type Participant = {
   square_count?: number;
 };
 
+type DigitMap = {
+  winning_digits: number[];
+  losing_digits: number[];
+  revealed_at: string | null;
+  locked_at: string | null;
+};
+
 const GRID_SIZE = 10;
 
 export default function AdminPage() {
@@ -34,6 +41,7 @@ export default function AdminPage() {
   const [newParticipantName, setNewParticipantName] = useState('');
   const [newParticipantContact, setNewParticipantContact] = useState('');
   const [message, setMessage] = useState<string>('');
+  const [digitMap, setDigitMap] = useState<DigitMap | null>(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem('adminToken');
@@ -74,6 +82,23 @@ export default function AdminPage() {
     [authHeaders]
   );
 
+  const loadDigitMap = useCallback(
+    async (poolId: string) => {
+      const res = await fetch(`/api/admin/pool/${poolId}/digits`, {
+        headers: authHeaders,
+        cache: 'no-store'
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        setMessage(error.error ?? 'Failed to load digit map');
+        return;
+      }
+      const data = await res.json();
+      setDigitMap(data.digit_map ?? null);
+    },
+    [authHeaders]
+  );
+
   const loadAll = useCallback(async () => {
     setMessage('');
     await loadPool();
@@ -86,8 +111,9 @@ export default function AdminPage() {
   useEffect(() => {
     if (pool && token) {
       loadParticipants(pool.id);
+      loadDigitMap(pool.id);
     }
-  }, [pool, token, loadParticipants]);
+  }, [pool, token, loadParticipants, loadDigitMap]);
 
   const grid = useMemo(() => {
     const base = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null) as Array<Square | null>);
@@ -222,6 +248,31 @@ export default function AdminPage() {
     }
   };
 
+  const callDigitAction = async (action: 'randomize' | 'reveal' | 'lock') => {
+    if (!pool) return;
+    if (!window.confirm(`Confirm ${action}?`)) return;
+
+    const endpoint =
+      action === 'lock'
+        ? `/api/admin/pool/${pool.id}/lock`
+        : `/api/admin/pool/${pool.id}/digits/${action}`;
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: authHeaders
+    });
+
+    if (!res.ok) {
+      const error = await res.json();
+      setMessage(error.error ?? `Failed to ${action} digits`);
+      return;
+    }
+
+    const data = await res.json();
+    setDigitMap(data.digit_map ?? data);
+    setMessage(`${action} complete.`);
+  };
+
   return (
     <main>
       <header>
@@ -290,6 +341,36 @@ export default function AdminPage() {
           ))}
           {participants.length === 0 && <p className="hint">No participants yet.</p>}
         </div>
+      </section>
+
+      <section className="panel">
+        <h2>Digit Map</h2>
+        <div className="form-row">
+          <button type="button" onClick={() => callDigitAction('randomize')}>
+            Randomize
+          </button>
+          <button type="button" onClick={() => callDigitAction('reveal')}>
+            Reveal
+          </button>
+          <button type="button" onClick={() => callDigitAction('lock')}>
+            Lock
+          </button>
+        </div>
+        {digitMap ? (
+          <div className="digit-map">
+            <div>
+              <strong>Winning digits:</strong> {digitMap.winning_digits.join(', ')}
+            </div>
+            <div>
+              <strong>Losing digits:</strong> {digitMap.losing_digits.join(', ')}
+            </div>
+            <div className="hint">
+              Revealed: {digitMap.revealed_at ?? 'not yet'} | Locked: {digitMap.locked_at ?? 'not yet'}
+            </div>
+          </div>
+        ) : (
+          <p className="hint">No digit map yet. Randomize to generate digits.</p>
+        )}
       </section>
 
       <section className="panel">
