@@ -78,7 +78,7 @@ Key constraints:
 
 ---
 
-### 3. Auth Provider (Supabase Auth or Clerk)
+### 3. Auth Provider (Supabase Auth)
 
 Responsibilities:
 - User authentication
@@ -112,6 +112,7 @@ Key entities:
 - Pool
   - One grid per tournament
   - Status: draft → open → locked → completed
+  - `locked_at` is a single lock action for the pool
 
 - Square
   - One of 100 cells (10×10)
@@ -121,13 +122,14 @@ Key entities:
   - Two permutations of digits 0–9:
     - Winning score axis
     - Losing score axis
-  - Reveal + lock timestamps
+  - Reveal timestamp (`revealed_at`)
 
 - Game
-  - Round
+  - Round (enum: `R64`, `R32`, `S16`, `E8`, `F4`, `Final`)
   - Teams
   - Scores
   - Status
+  - Play-in games are excluded from v1 pool scoring
 
 - GameResult
   - Computed once per final game
@@ -160,6 +162,7 @@ Decision:
   - Resolve square
   - Snapshot payout
   - Write game_result once
+  - Throw an error if a tie score is detected
 
 Reason:
 - Prevents double payouts
@@ -169,6 +172,7 @@ Reason:
 Implementation:
 - Unique DB constraint on (pool_id, game_id)
 - Finalize endpoint is idempotent
+- Finalization requires digits revealed and pool locked
 
 ---
 
@@ -209,3 +213,49 @@ Decision:
 Reason:
 - Encourages transparency
 - Minimizes auth friction for viewers
+
+---
+
+### Pool Lifecycle and Transition Rules
+
+Lifecycle:
+- `draft` → `open` → `locked` → `completed`
+
+Rules:
+- Admin-only transitions.
+- Transitions are reversible by admin if operational corrections are needed.
+- Before moving to `locked`, all prerequisites must be true:
+  - All 100 squares are assigned.
+  - At least one participant exists.
+  - Digits have been randomized.
+  - Payouts are configured for all rounds.
+
+Lock behavior:
+- A single pool lock action (`locked_at`) freezes both:
+  - Digit randomization/changes
+  - Square assignment changes
+- Locking also makes digits publicly visible immediately.
+
+---
+
+### Payout Tracking Model (v1)
+
+Decision:
+- Payouts are tracking values during the tournament, not immediate real-money disbursements.
+
+Rules:
+- Store payout values as integer cents for deterministic math.
+- Keep round-level payout configuration versioned.
+- Preserve per-game payout snapshots at finalization for historical correctness.
+
+---
+
+### Score Ingestion Override Policy (Phase 2)
+
+Decision:
+- Use a game-level override flag.
+- Preserve both API values and admin override values.
+- If an override exists, admin explicitly chooses which source is authoritative.
+
+Rules:
+- Finalization auto-triggers on API final status only when override is not active.
