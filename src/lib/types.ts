@@ -35,6 +35,20 @@ export type DigitMapRow = {
   created_at: Date | null;
 };
 
+export type GameRow = {
+  id: string;
+  pool_id: string;
+  round_key: string;
+  team_a: string;
+  team_b: string;
+  score_a: number | null;
+  score_b: number | null;
+  status: string;
+  start_time: Date | null;
+  external_id: string | null;
+  updated_at: Date;
+};
+
 export type SquareRow = {
   id: string;
   pool_id: string;
