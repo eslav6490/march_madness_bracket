@@ -41,6 +41,9 @@ describe('FEAT-010 pool lock enforcement', () => {
     await upsertDigitMap(db, poolId, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     const participant = await createParticipant(db, poolId, 'Existing Participant');
+    // FEAT-010 prerequisites: all 100 squares assigned before locking.
+    await db.query('update squares set participant_id = $1 where pool_id = $2', [participant.id, poolId]);
+
     const game = await createGame(db, poolId, {
       round_key: 'round_of_64',
       team_a: 'Team A',
@@ -155,10 +158,8 @@ describe('FEAT-010 pool lock enforcement', () => {
     await upsertDigitMap(db, poolId, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
     const participant = await createParticipant(db, poolId, 'Winner');
-    await db.query('update squares set participant_id = $1 where pool_id = $2 and row_index = 1 and col_index = 1', [
-      participant.id,
-      poolId
-    ]);
+    // FEAT-010 prerequisites: all 100 squares assigned before locking.
+    await db.query('update squares set participant_id = $1 where pool_id = $2', [participant.id, poolId]);
 
     const game = await createGame(db, poolId, {
       round_key: 'round_of_64',
@@ -196,4 +197,3 @@ describe('FEAT-010 pool lock enforcement', () => {
     expect(publicBody.results).toHaveLength(1);
   });
 });
-
