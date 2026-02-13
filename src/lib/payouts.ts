@@ -76,6 +76,27 @@ export async function getLatestPayouts(db: DbClient, poolId: string): Promise<La
     }
   }
 
+  const missingRoundKeys = ROUND_KEYS.filter((roundKey) => !latestByRound.has(roundKey));
+  if (missingRoundKeys.length > 0) {
+    const values: string[] = [];
+    const params: Array<string | number> = [];
+    let paramIndex = 1;
+    const seededAt = new Date();
+
+    for (const roundKey of missingRoundKeys) {
+      values.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3})`);
+      params.push(randomUUID(), poolId, roundKey, DEFAULT_PAYOUTS_CENTS[roundKey]);
+      latestByRound.set(roundKey, { amount: DEFAULT_PAYOUTS_CENTS[roundKey], effectiveAt: seededAt });
+      paramIndex += 4;
+    }
+
+    await db.query(
+      `insert into payout_configs (id, pool_id, round_key, amount_cents)
+       values ${values.join(', ')}`,
+      params
+    );
+  }
+
   for (const roundKey of ROUND_KEYS) {
     const current = latestByRound.get(roundKey);
     if (!current) {
