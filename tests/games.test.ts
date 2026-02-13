@@ -148,4 +148,33 @@ describe('games admin and public API', () => {
     const data = await response.json();
     expect(data.games).toHaveLength(1);
   });
+  it('returns 409 when pool locks between guard and write', async () => {
+    const poolId = await createPoolWithSquares(db, 'Race Lock Pool');
+
+    vi.doMock('@/lib/db', () => ({ getDb: () => db }));
+    vi.doMock('@/lib/pool-lock', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@/lib/pool-lock')>();
+      return { ...actual, isPoolLocked: vi.fn().mockResolvedValue(false) };
+    });
+    const { POST } = await import('../app/api/admin/pool/[poolId]/games/route');
+
+    await db.query("update pools set status = 'locked' where id = $1", [poolId]);
+
+    const response = await POST(
+      new Request('http://localhost', {
+        method: 'POST',
+        headers: { 'x-admin-token': ADMIN_TOKEN },
+        body: JSON.stringify({
+          round_key: 'round_of_64',
+          team_a: 'Team A',
+          team_b: 'Team B',
+          status: 'scheduled'
+        })
+      }),
+      { params: { poolId } }
+    );
+
+    expect(response.status).toBe(409);
+  });
+
 });

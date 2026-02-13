@@ -123,4 +123,33 @@ describe('payout configs', () => {
 
     expect(extraResponse.status).toBe(400);
   });
+  it('returns 409 when pool locks between guard and payout write', async () => {
+    const poolId = await createPoolWithSquares(db, 'Payout Race Pool');
+
+    const updated = ROUND_KEYS.reduce((acc, key, index) => {
+      acc[key] = DEFAULT_PAYOUTS_CENTS[key] + (index + 1) * 10;
+      return acc;
+    }, {} as Record<(typeof ROUND_KEYS)[number], number>);
+
+    vi.doMock('@/lib/db', () => ({ getDb: () => db }));
+    vi.doMock('@/lib/pool-lock', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@/lib/pool-lock')>();
+      return { ...actual, isPoolLocked: vi.fn().mockResolvedValue(false) };
+    });
+    const { POST } = await import('../app/api/admin/pool/[poolId]/payouts/route');
+
+    await db.query("update pools set status = 'locked' where id = $1", [poolId]);
+
+    const response = await POST(
+      new Request('http://localhost', {
+        method: 'POST',
+        headers: { 'x-admin-token': ADMIN_TOKEN },
+        body: JSON.stringify({ payouts: updated })
+      }),
+      { params: { poolId } }
+    );
+
+    expect(response.status).toBe(409);
+  });
+
 });

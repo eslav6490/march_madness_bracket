@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 
 import { requireAdmin } from '@/lib/admin';
 import { getDb } from '@/lib/db';
-import { isPoolLocked } from '@/lib/pool-lock';
+import { withPoolUnlockedWrite } from '@/lib/pool-lock';
 import { getLatestPayouts, ROUND_KEYS, validatePayoutPayload } from '@/lib/payouts';
 
 export async function GET(request: Request, { params }: { params: { poolId: string } }) {
@@ -25,9 +25,6 @@ export async function POST(request: Request, { params }: { params: { poolId: str
   if (unauthorized) return unauthorized;
 
   const db = getDb();
-  if (await isPoolLocked(db, params.poolId)) {
-    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
-  }
 
   const body = await request.json();
 
@@ -48,11 +45,20 @@ export async function POST(request: Request, { params }: { params: { poolId: str
     paramIndex += 4;
   }
 
-  await db.query(
-    `insert into payout_configs (id, pool_id, round_key, amount_cents)
-     values ${values.join(', ')}`,
-    paramsList
-  );
+  try {
+    await withPoolUnlockedWrite(db, params.poolId, (client) =>
+      client.query(
+        `insert into payout_configs (id, pool_id, round_key, amount_cents)
+         values ${values.join(', ')}`,
+        paramsList
+      )
+    );
+  } catch (error) {
+    if ((error as Error).message === 'pool_locked') {
+      return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+    }
+    throw error;
+  }
 
   const data = await getLatestPayouts(db, params.poolId);
   return NextResponse.json(data);

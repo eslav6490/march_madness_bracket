@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getDb } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin';
-import { isPoolLocked } from '@/lib/pool-lock';
+import { withPoolUnlockedWrite } from '@/lib/pool-lock';
 import { assignSquare } from '@/lib/squares';
 
 export async function PATCH(request: Request, { params }: { params: { poolId: string } }) {
@@ -10,9 +10,6 @@ export async function PATCH(request: Request, { params }: { params: { poolId: st
   if (unauthorized) return unauthorized;
 
   const db = getDb();
-  if (await isPoolLocked(db, params.poolId)) {
-    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
-  }
 
   const body = await request.json();
   const rowIndex = Number(body.row_index);
@@ -28,9 +25,14 @@ export async function PATCH(request: Request, { params }: { params: { poolId: st
   }
 
   try {
-    const square = await assignSquare(db, params.poolId, rowIndex, colIndex, participantId);
+    const square = await withPoolUnlockedWrite(db, params.poolId, (client) =>
+      assignSquare(client, params.poolId, rowIndex, colIndex, participantId)
+    );
     return NextResponse.json({ square });
   } catch (error) {
+    if ((error as Error).message === 'pool_locked') {
+      return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+    }
     return NextResponse.json({ error: (error as Error).message }, { status: 404 });
   }
 }
