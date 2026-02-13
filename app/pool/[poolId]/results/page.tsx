@@ -5,6 +5,8 @@ import type { PoolResultRow } from '@/lib/results';
 
 import { GET as getResults } from '../../../api/pool/[poolId]/results/route';
 
+export const dynamic = 'force-dynamic';
+
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD'
