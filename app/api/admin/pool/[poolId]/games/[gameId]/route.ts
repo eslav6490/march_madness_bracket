@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
 import { getDb } from '@/lib/db';
-import { isPoolLocked } from '@/lib/pool-lock';
+import { withPoolUnlockedWrite } from '@/lib/pool-lock';
 import {
   isValidRoundKey,
   isValidStatus,
@@ -22,9 +22,6 @@ export async function PATCH(
   if (unauthorized) return unauthorized;
 
   const db = getDb();
-  if (await isPoolLocked(db, params.poolId)) {
-    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
-  }
 
   const body = await request.json();
 
@@ -84,9 +81,14 @@ export async function PATCH(
   }
 
   try {
-    const game = await updateGame(db, params.poolId, params.gameId, updates);
+    const game = await withPoolUnlockedWrite(db, params.poolId, (client) =>
+      updateGame(client, params.poolId, params.gameId, updates)
+    );
     return NextResponse.json({ game });
   } catch (error) {
+    if ((error as Error).message === 'pool_locked') {
+      return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+    }
     return NextResponse.json({ error: (error as Error).message }, { status: 404 });
   }
 }
@@ -99,10 +101,13 @@ export async function DELETE(
   if (unauthorized) return unauthorized;
 
   const db = getDb();
-  if (await isPoolLocked(db, params.poolId)) {
-    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+  try {
+    await withPoolUnlockedWrite(db, params.poolId, (client) => deleteGame(client, params.poolId, params.gameId));
+    return NextResponse.json({ deleted: true });
+  } catch (error) {
+    if ((error as Error).message === 'pool_locked') {
+      return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+    }
+    throw error;
   }
-
-  await deleteGame(db, params.poolId, params.gameId);
-  return NextResponse.json({ deleted: true });
 }

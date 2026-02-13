@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { getDb } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin';
-import { isPoolLocked } from '@/lib/pool-lock';
+import { withPoolUnlockedWrite } from '@/lib/pool-lock';
 import { deleteParticipant, updateParticipant } from '@/lib/participants';
 
 export async function PATCH(request: Request, { params }: { params: { participantId: string } }) {
@@ -15,9 +15,6 @@ export async function PATCH(request: Request, { params }: { params: { participan
     return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
   }
   const poolId = String(poolLookup.rows[0].pool_id);
-  if (await isPoolLocked(db, poolId)) {
-    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
-  }
 
   const body = await request.json();
   const displayName = typeof body.display_name === 'string' ? body.display_name.trim() : '';
@@ -28,9 +25,14 @@ export async function PATCH(request: Request, { params }: { params: { participan
   }
 
   try {
-    const participant = await updateParticipant(db, params.participantId, displayName, contactInfo);
+    const participant = await withPoolUnlockedWrite(db, poolId, (client) =>
+      updateParticipant(client, params.participantId, displayName, contactInfo)
+    );
     return NextResponse.json({ participant });
   } catch (error) {
+    if ((error as Error).message === 'pool_locked') {
+      return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+    }
     return NextResponse.json({ error: (error as Error).message }, { status: 404 });
   }
 }
@@ -48,14 +50,20 @@ export async function DELETE(request: Request, { params }: { params: { participa
     return NextResponse.json({ error: 'Participant not found' }, { status: 404 });
   }
   const poolId = String(poolLookup.rows[0].pool_id);
-  if (await isPoolLocked(db, poolId)) {
-    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
-  }
 
-  const result = await deleteParticipant(db, params.participantId, force);
-  if (!result.deleted) {
-    return NextResponse.json({ error: 'participant_has_squares', ownedSquares: result.ownedSquares }, { status: 409 });
-  }
+  try {
+    const result = await withPoolUnlockedWrite(db, poolId, (client) =>
+      deleteParticipant(client, params.participantId, force)
+    );
+    if (!result.deleted) {
+      return NextResponse.json({ error: 'participant_has_squares', ownedSquares: result.ownedSquares }, { status: 409 });
+    }
 
-  return NextResponse.json({ deleted: true, ownedSquares: result.ownedSquares });
+    return NextResponse.json({ deleted: true, ownedSquares: result.ownedSquares });
+  } catch (error) {
+    if ((error as Error).message === 'pool_locked') {
+      return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+    }
+    return NextResponse.json({ error: (error as Error).message }, { status: 404 });
+  }
 }

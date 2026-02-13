@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAdmin } from '@/lib/admin';
 import { getDb } from '@/lib/db';
-import { isPoolLocked } from '@/lib/pool-lock';
+import { withPoolUnlockedWrite } from '@/lib/pool-lock';
 import { createGame, isValidRoundKey, isValidStatus, listGames, parseScore, parseStartTime } from '@/lib/games';
 
 export async function GET(request: Request, { params }: { params: { poolId: string } }) {
@@ -19,9 +19,6 @@ export async function POST(request: Request, { params }: { params: { poolId: str
   if (unauthorized) return unauthorized;
 
   const db = getDb();
-  if (await isPoolLocked(db, params.poolId)) {
-    return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
-  }
 
   const body = await request.json();
   const roundKey = typeof body.round_key === 'string' ? body.round_key : '';
@@ -51,16 +48,25 @@ export async function POST(request: Request, { params }: { params: { poolId: str
     return NextResponse.json({ error: (error as Error).message }, { status: 400 });
   }
 
-  const game = await createGame(db, params.poolId, {
-    round_key: roundKey,
-    team_a: teamA,
-    team_b: teamB,
-    status,
-    score_a: scoreA,
-    score_b: scoreB,
-    start_time: startTime,
-    external_id: body.external_id ?? null
-  });
+  try {
+    const game = await withPoolUnlockedWrite(db, params.poolId, (client) =>
+      createGame(client, params.poolId, {
+        round_key: roundKey,
+        team_a: teamA,
+        team_b: teamB,
+        status,
+        score_a: scoreA,
+        score_b: scoreB,
+        start_time: startTime,
+        external_id: body.external_id ?? null
+      })
+    );
 
-  return NextResponse.json({ game });
+    return NextResponse.json({ game });
+  } catch (error) {
+    if ((error as Error).message === 'pool_locked') {
+      return NextResponse.json({ error: 'pool_locked' }, { status: 409 });
+    }
+    throw error;
+  }
 }
