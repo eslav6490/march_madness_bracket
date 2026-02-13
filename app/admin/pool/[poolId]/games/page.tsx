@@ -69,7 +69,7 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
   const authHeaders = useMemo(() => {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     if (token) {
-      headers.set('x-admin-token', token);
+      headers.set('Authorization', `Bearer ${token}`);
     }
     return headers;
   }, [token]);
@@ -107,7 +107,7 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
 
   const handleSaveToken = () => {
     window.localStorage.setItem('adminToken', token);
-    setMessage('Admin token saved.');
+    setMessage('Session token saved.');
   };
 
   const handleCreate = async () => {
@@ -196,17 +196,20 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
       </header>
 
       <section className="panel">
-        <h2>Admin Token</h2>
+        <h2>Admin Session</h2>
         <div className="form-row">
           <input
             type="password"
-            placeholder="Admin token"
+            placeholder="Supabase access token"
             value={token}
             onChange={(event) => setToken(event.target.value)}
           />
           <button type="button" onClick={handleSaveToken}>
-            Save Token
+            Save Session
           </button>
+          <a className="button-link" href="/admin/login">
+            Login
+          </a>
         </div>
       </section>
 

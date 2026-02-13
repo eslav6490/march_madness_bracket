@@ -7,7 +7,7 @@ import { isPoolLocked } from '@/lib/pool-lock';
 import { createGame, isValidRoundKey, isValidStatus, listGames, parseScore, parseStartTime } from '@/lib/games';
 
 export async function GET(request: Request, { params }: { params: { poolId: string } }) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const db = getDb();
@@ -16,7 +16,7 @@ export async function GET(request: Request, { params }: { params: { poolId: stri
 }
 
 export async function POST(request: Request, { params }: { params: { poolId: string } }) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const db = getDb();

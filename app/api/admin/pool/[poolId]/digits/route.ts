@@ -5,7 +5,7 @@ import { getDb } from '@/lib/db';
 import { getDigitMap } from '@/lib/digits';
 
 export async function GET(request: Request, { params }: { params: { poolId: string } }) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const db = getDb();

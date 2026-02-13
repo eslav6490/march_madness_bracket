@@ -12,12 +12,24 @@ Next.js + Postgres app for running a March Madness squares pool (single 10x10 gr
 Required:
 
 - `DATABASE_URL` (Postgres connection string)
-- `ADMIN_TOKEN` (simple header guard for admin write endpoints)
+- `SUPABASE_URL` (Supabase project URL for server-side token verification)
+- `SUPABASE_ANON_KEY` (Supabase anon key for server-side auth lookup)
+- `NEXT_PUBLIC_SUPABASE_URL` (browser Supabase URL used by `/admin/login`)
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (browser Supabase anon key used by `/admin/login`)
 
 Example:
 
 ```bash
 export DATABASE_URL='postgres://mmapp:mmapp_dev@127.0.0.1:5432/march_madness'
+export SUPABASE_URL='https://your-project.supabase.co'
+export SUPABASE_ANON_KEY='your-anon-key'
+export NEXT_PUBLIC_SUPABASE_URL='https://your-project.supabase.co'
+export NEXT_PUBLIC_SUPABASE_ANON_KEY='your-anon-key'
+```
+
+Optional compatibility fallback:
+
+```bash
 export ADMIN_TOKEN='dev-admin'
 ```
 
@@ -58,6 +70,7 @@ npm run typecheck
 ## Notes
 
 - Public pages are readable without auth.
-- Admin mutations require sending a request header `ADMIN_TOKEN: <value>`.
-- This repo currently uses a lightweight admin guard token (Supabase auth is not implemented yet).
-
+- Admin mutations require `Authorization: Bearer <supabase-access-token>`.
+- The bearer token must resolve to a Supabase user with admin role metadata.
+- `/admin/login` provides an email/password sign-in flow against Supabase Auth.
+- `ADMIN_TOKEN` remains supported as a legacy fallback for local testing.

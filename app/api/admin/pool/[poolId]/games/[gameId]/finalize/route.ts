@@ -9,7 +9,7 @@ export async function POST(
   request: Request,
   { params }: { params: { poolId: string; gameId: string } }
 ) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const db = getDb();
