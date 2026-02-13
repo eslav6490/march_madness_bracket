@@ -31,6 +31,12 @@ describe('public results page', () => {
     vi.clearAllMocks();
   });
 
+
+  it('opts out of static caching', async () => {
+    const mod = await import('../app/pool/[poolId]/results/page');
+
+    expect(mod.dynamic).toBe('force-dynamic');
+  });
   it('server-renders grouped results with totals', async () => {
     const poolId = await createPoolWithSquares(db, 'UI Pool');
 
