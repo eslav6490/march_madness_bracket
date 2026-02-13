@@ -53,6 +53,27 @@ describe('payout configs', () => {
     }
   });
 
+
+  it('backfills missing payout rows for legacy pools', async () => {
+    const poolId = await createPoolWithSquares(db, 'Legacy Payouts');
+
+    await db.query('delete from payout_configs where pool_id = $1 and round_key = $2', [poolId, 'championship']);
+
+    vi.doMock('@/lib/db', () => ({ getDb: () => db }));
+    const { GET } = await import('../app/api/pool/[poolId]/payouts/route');
+
+    const response = await GET(new Request('http://localhost'), { params: { poolId } });
+    expect(response.status).toBe(200);
+
+    const data = await response.json();
+    expect(data.payouts.championship).toBe(DEFAULT_PAYOUTS_CENTS.championship);
+
+    const missingRoundRows = await db.query(
+      'select count(*)::int as count from payout_configs where pool_id = $1 and round_key = $2',
+      [poolId, 'championship']
+    );
+    expect(missingRoundRows.rows[0].count).toBe(1);
+  });
   it('admin POST appends new version rows and updates latest', async () => {
     const poolId = await createPoolWithSquares(db, 'Admin Payouts');
 
