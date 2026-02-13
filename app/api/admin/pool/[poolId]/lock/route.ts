@@ -8,7 +8,7 @@ import { checkPoolLockPrerequisites } from '@/lib/pool-lock';
 import type { DbClient, DbPool } from '@/lib/types';
 
 export async function POST(request: Request, { params }: { params: { poolId: string } }) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const db = getDb();

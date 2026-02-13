@@ -53,7 +53,7 @@ export default function AdminPage() {
   const authHeaders = useMemo(() => {
     const headers = new Headers({ 'Content-Type': 'application/json' });
     if (token) {
-      headers.set('x-admin-token', token);
+      headers.set('Authorization', `Bearer ${token}`);
     }
     return headers;
   }, [token]);
@@ -127,7 +127,7 @@ export default function AdminPage() {
 
   const handleSaveToken = () => {
     window.localStorage.setItem('adminToken', token);
-    setMessage('Admin token saved.');
+    setMessage('Session token saved.');
     if (pool) {
       loadParticipants(pool.id);
     }
@@ -282,20 +282,23 @@ export default function AdminPage() {
       </header>
 
       <section className="panel">
-        <h2>Admin Token</h2>
-        <p>Set your admin token to enable write actions.</p>
+        <h2>Admin Session</h2>
+        <p>Sign in at `/admin/login`, then use the access token for admin API access.</p>
         <div className="form-row">
           <input
             type="password"
-            placeholder="Admin token"
+            placeholder="Supabase access token"
             value={token}
             onChange={(event) => setToken(event.target.value)}
           />
           <button type="button" onClick={handleSaveToken}>
-            Save Token
+            Save Session
           </button>
+          <a className="button-link" href="/admin/login">
+            Login
+          </a>
         </div>
-        <p className="hint">Set `ADMIN_TOKEN` in your environment and use it here.</p>
+        <p className="hint">Token must belong to a Supabase user with admin role metadata.</p>
       </section>
 
       {message && <div className="message">{message}</div>}

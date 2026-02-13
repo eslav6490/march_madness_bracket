@@ -7,7 +7,7 @@ import { isPoolLocked } from '@/lib/pool-lock';
 import { deleteParticipant, updateParticipant } from '@/lib/participants';
 
 export async function PATCH(request: Request, { params }: { params: { participantId: string } }) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const db = getDb();
@@ -45,7 +45,7 @@ export async function PATCH(request: Request, { params }: { params: { participan
 }
 
 export async function DELETE(request: Request, { params }: { params: { participantId: string } }) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);

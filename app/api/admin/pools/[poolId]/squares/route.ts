@@ -7,7 +7,7 @@ import { isPoolLocked } from '@/lib/pool-lock';
 import { assignSquare } from '@/lib/squares';
 
 export async function PATCH(request: Request, { params }: { params: { poolId: string } }) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const db = getDb();

@@ -1,15 +1,15 @@
 # Project Status
 
-Last updated: 2026-02-07
+Last updated: 2026-02-13
 
 ## Summary
-- Current working branch: `feat-008-009-analytics`
+- Current working branch: `main`
 - Stack: Next.js + Postgres
-- Admin access: `ADMIN_TOKEN` header guard only (no Supabase auth yet)
+- Admin access: Supabase bearer auth (`Authorization: Bearer <token>`) with admin role checks
 
 ## Epics
 - EPIC-001 Core Pool and Grid: Done
-- EPIC-002 Auth and Admin Controls: Not started
+- EPIC-002 Auth and Admin Controls: Done (Supabase auth + admin role enforcement on write endpoints)
 - EPIC-003 Payout Configuration: Done (versioned payouts + admin editor + public view)
 - EPIC-004 Games and Results: Partial (games CRUD + finalization + results API + public results UI done)
 - EPIC-005 Analytics and Heatmap: Done (square heatmap + participant leaderboard + public analytics page)
@@ -36,6 +36,7 @@ Last updated: 2026-02-07
 - Game finalization, public results page, and public analytics are implemented.
 - Pool locking prerequisites are enforced on the lock endpoint.
 - Admin audit log is available at `/admin/pool/[poolId]/audit`.
+- Admin login is available at `/admin/login`.
 - Public payouts page is at `/payouts`. Admin payouts editor is at `/admin/pool/[poolId]/payouts`.
 - Admin games UI is at `/admin/pool/[poolId]/games`.
 - Results:

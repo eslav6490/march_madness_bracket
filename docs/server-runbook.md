@@ -24,7 +24,12 @@ Create a local env file that Next.js will load automatically:
 ```bash
 cat > /root/march_madness_bracket/.env.local <<'EOF'
 DATABASE_URL=postgres://mmapp:mmapp_dev@127.0.0.1:5432/march_madness
-ADMIN_TOKEN=dev-admin
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+# Optional legacy fallback for local/testing only:
+# ADMIN_TOKEN=dev-admin
 EOF
 ```
 
@@ -109,4 +114,3 @@ Then browse:
 ```text
 http://localhost:3000/
 ```
-

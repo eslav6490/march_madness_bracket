@@ -5,7 +5,7 @@ import { listAuditEvents } from '@/lib/audit';
 import { getDb } from '@/lib/db';
 
 export async function GET(request: Request, { params }: { params: { poolId: string } }) {
-  const unauthorized = requireAdmin(request);
+  const unauthorized = await requireAdmin(request);
   if (unauthorized) return unauthorized;
 
   const { searchParams } = new URL(request.url);
