@@ -35,6 +35,40 @@ header {
   gap: 8px;
 }
 
+.page-nav {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.page-nav__link {
+  min-width: 96px;
+}
+
+.page-nav__link--active {
+  border-width: 2px;
+  border-color: var(--text);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  flex-wrap: wrap;
+}
+
+.breadcrumb a {
+  color: var(--accent);
+}
+
+.breadcrumb__sep {
+  opacity: 0.6;
+}
+
 h1 {
   font-size: clamp(2rem, 4vw, 3rem);
   margin: 0;
@@ -214,6 +248,28 @@ button:hover {
   border: 1px solid var(--cell-border);
 }
 
+.status-pill {
+  align-self: flex-start;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--cell-border);
+}
+
+.status-pill--draft {
+  background: #efe7db;
+}
+
+.status-pill--open {
+  background: #e8f3dc;
+}
+
+.status-pill--locked,
+.status-pill--completed {
+  background: #fbe4d6;
+}
+
 .digit-map {
   display: flex;
   flex-direction: column;
@@ -228,6 +284,25 @@ button:hover {
 .button-secondary {
   background: transparent;
   color: var(--accent);
+}
+
+.skeleton-line,
+.skeleton-block {
+  display: inline-block;
+  width: 100%;
+  min-height: 1rem;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #e7ddd0 25%, #f5ede1 50%, #e7ddd0 75%);
+  background-size: 200% 100%;
+  animation: skeleton-wave 1.2s ease-in-out infinite;
+}
+
+.skeleton-block {
+  min-height: 72px;
+}
+
+.grid-skeleton {
+  pointer-events: none;
 }
 
 .analytics-toggle {
@@ -264,6 +339,15 @@ button:hover {
   white-space: nowrap;
   text-overflow: ellipsis;
   min-height: 1rem;
+}
+
+@keyframes skeleton-wave {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @media (max-width: 900px) {

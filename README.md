@@ -69,9 +69,12 @@ npm run typecheck
 ## Notes
 
 - Public pages are readable without auth.
+- Public pages share a top navigation bar (`Grid`, `Payouts`, `Results`, `Analytics`) so users can move between views while preserving pool context.
 - Admin browser sessions use a server-managed `HttpOnly` cookie set by `/api/admin/auth/login`.
 - `/admin/login` accepts email/password and establishes the cookie-backed session.
 - `/api/admin/auth/logout` clears the admin session cookie.
 - Admin API routes are cookie-session-first and still accept `Authorization: Bearer ...` when provided.
 - `ADMIN_TOKEN` + `x-admin-token` remains supported as a deprecated legacy fallback for local scripts/tests.
 - After deploying this change, existing admins must sign in again to establish the new cookie session.
+- Admin pool tool pages include shared breadcrumb/sub-navigation for `Games`, `Payouts`, and `Audit`.
+- Admin UI now shows visible pool lock state and proactively disables lock-blocked actions before API submit.

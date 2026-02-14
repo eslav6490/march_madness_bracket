@@ -2,6 +2,7 @@ import React from 'react';
 
 import { getDb } from '@/lib/db';
 import { getParticipantLeaderboard, getSquareStats } from '@/lib/analytics';
+import { PublicNav } from '@/components/public-nav';
 
 import AnalyticsClient from './analytics-client';
 
@@ -24,6 +25,7 @@ export default async function PoolAnalyticsPage({ params }: { params: { poolId: 
           <span className="badge">Public Analytics</span>
           <h1>Analytics</h1>
           <p>Pool ID: {params.poolId}</p>
+          <PublicNav poolId={params.poolId} activeKey="analytics" />
         </header>
 
         <section className="panel">
@@ -58,6 +60,7 @@ export default async function PoolAnalyticsPage({ params }: { params: { poolId: 
           <span className="badge">Public Analytics</span>
           <h1>Analytics</h1>
           <p>Pool ID: {params.poolId}</p>
+          <PublicNav poolId={params.poolId} activeKey="analytics" />
         </header>
         <section className="panel">
           <p>{message === 'pool_not_found' ? 'Pool not found.' : 'Failed to load analytics.'}</p>

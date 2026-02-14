@@ -8,6 +8,7 @@ import { useAdminSessionGuard } from '@/components/use-admin-session-guard';
 type Pool = {
   id: string;
   name: string;
+  status: string;
 };
 
 type Square = {
@@ -44,6 +45,22 @@ async function readErrorMessage(response: Response, fallback: string) {
   }
 }
 
+function getStatusDescription(status: string) {
+  if (status === 'draft') {
+    return 'Draft: configure participants, squares, and digits before locking.';
+  }
+  if (status === 'open') {
+    return 'Open: setup is still editable and lock prerequisites can be completed.';
+  }
+  if (status === 'locked') {
+    return 'Locked: participant, square, game, and payout edits are blocked.';
+  }
+  if (status === 'completed') {
+    return 'Completed: tournament processing is complete and data is historical.';
+  }
+  return 'Status unavailable.';
+}
+
 export default function AdminPage() {
   const sessionReady = useAdminSessionGuard();
   const [pool, setPool] = useState<Pool | null>(null);
@@ -56,47 +73,76 @@ export default function AdminPage() {
   const [message, setMessage] = useState<string>('');
   const [digitMap, setDigitMap] = useState<DigitMap | null>(null);
 
+  const [isLoadingPool, setIsLoadingPool] = useState(false);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+  const [isLoadingDigitMap, setIsLoadingDigitMap] = useState(false);
+
+  const [isCreatingParticipant, setIsCreatingParticipant] = useState(false);
+  const [busyParticipantId, setBusyParticipantId] = useState<string | null>(null);
+  const [busyParticipantAction, setBusyParticipantAction] = useState<'edit' | 'delete' | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [digitActionLoading, setDigitActionLoading] = useState<'randomize' | 'reveal' | 'lock' | null>(null);
+
   const loadPool = useCallback(async () => {
-    const res = await fetch('/api/pool', { cache: 'no-store' });
-    const data = await res.json();
-    setPool(data.pool);
-    setSquares(data.squares);
+    setIsLoadingPool(true);
+    try {
+      const res = await fetch('/api/pool', { cache: 'no-store' });
+      if (!res.ok) {
+        setMessage(await readErrorMessage(res, 'Failed to load pool'));
+        return;
+      }
+      const data = await res.json();
+      setPool(data.pool ?? null);
+      setSquares(data.squares ?? []);
+    } finally {
+      setIsLoadingPool(false);
+    }
   }, []);
 
   const loadParticipants = useCallback(
     async (poolId: string) => {
-      const res = await fetch(`/api/admin/pools/${poolId}/participants`, {
-        cache: 'no-store'
-      });
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          window.location.href = '/admin/login';
+      setIsLoadingParticipants(true);
+      try {
+        const res = await fetch(`/api/admin/pools/${poolId}/participants`, {
+          cache: 'no-store'
+        });
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            window.location.href = '/admin/login';
+            return;
+          }
+          setMessage(await readErrorMessage(res, 'Failed to load participants'));
           return;
         }
-        setMessage(await readErrorMessage(res, 'Failed to load participants'));
-        return;
+        const data = await res.json();
+        setParticipants(data.participants ?? []);
+      } finally {
+        setIsLoadingParticipants(false);
       }
-      const data = await res.json();
-      setParticipants(data.participants ?? []);
     },
     []
   );
 
   const loadDigitMap = useCallback(
     async (poolId: string) => {
-      const res = await fetch(`/api/admin/pool/${poolId}/digits`, {
-        cache: 'no-store'
-      });
-      if (!res.ok) {
-        if (res.status === 401 || res.status === 403) {
-          window.location.href = '/admin/login';
+      setIsLoadingDigitMap(true);
+      try {
+        const res = await fetch(`/api/admin/pool/${poolId}/digits`, {
+          cache: 'no-store'
+        });
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            window.location.href = '/admin/login';
+            return;
+          }
+          setMessage(await readErrorMessage(res, 'Failed to load digit map'));
           return;
         }
-        setMessage(await readErrorMessage(res, 'Failed to load digit map'));
-        return;
+        const data = await res.json();
+        setDigitMap(data.digit_map ?? null);
+      } finally {
+        setIsLoadingDigitMap(false);
       }
-      const data = await res.json();
-      setDigitMap(data.digit_map ?? null);
     },
     []
   );
@@ -127,134 +173,167 @@ export default function AdminPage() {
   }, [squares]);
 
   const filledCount = squares.filter((square) => square.participant_id).length;
+  const isLocked = pool?.status === 'locked';
+
+  const randomizeDisabled = !pool || isLocked || digitActionLoading !== null;
+  const revealDisabled = !pool || !digitMap || Boolean(digitMap.revealed_at) || isLocked || digitActionLoading !== null;
+  const lockDisabled = !pool || isLocked || digitActionLoading !== null;
 
   const handleCreateParticipant = async () => {
-    if (!pool) return;
+    if (!pool || isLocked || isCreatingParticipant) return;
     if (!newParticipantName.trim()) {
       setMessage('Participant name is required.');
       return;
     }
 
-    const res = await fetch(`/api/admin/pools/${pool.id}/participants`, {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({
-        display_name: newParticipantName.trim(),
-        contact_info: newParticipantContact.trim() || null
-      })
-    });
+    setIsCreatingParticipant(true);
+    try {
+      const res = await fetch(`/api/admin/pools/${pool.id}/participants`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          display_name: newParticipantName.trim(),
+          contact_info: newParticipantContact.trim() || null
+        })
+      });
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to create participant'));
         return;
       }
-      setMessage(await readErrorMessage(res, 'Failed to create participant'));
-      return;
-    }
 
-    const data = await res.json();
-    setParticipants((prev) => [...prev, data.participant]);
-    setNewParticipantName('');
-    setNewParticipantContact('');
-    setMessage('Participant created.');
+      const data = await res.json();
+      setParticipants((prev) => [...prev, data.participant]);
+      setNewParticipantName('');
+      setNewParticipantContact('');
+      setMessage('Participant created.');
+    } finally {
+      setIsCreatingParticipant(false);
+    }
   };
 
   const handleEditParticipant = async (participant: Participant) => {
+    if (isLocked || busyParticipantId) return;
+
     const displayName = window.prompt('Edit participant name', participant.display_name);
     if (!displayName) return;
     const contactInfo = window.prompt('Edit contact info (optional)', participant.contact_info ?? '') ?? '';
 
-    const res = await fetch(`/api/admin/participants/${participant.id}`, {
-      method: 'PATCH',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ display_name: displayName.trim(), contact_info: contactInfo.trim() || null })
-    });
+    setBusyParticipantId(participant.id);
+    setBusyParticipantAction('edit');
+    try {
+      const res = await fetch(`/api/admin/participants/${participant.id}`, {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ display_name: displayName.trim(), contact_info: contactInfo.trim() || null })
+      });
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to update participant'));
         return;
       }
-      setMessage(await readErrorMessage(res, 'Failed to update participant'));
-      return;
-    }
 
-    const data = await res.json();
-    setParticipants((prev) =>
-      prev.map((item) => (item.id === participant.id ? { ...item, ...data.participant } : item))
-    );
-    setMessage('Participant updated.');
+      const data = await res.json();
+      setParticipants((prev) =>
+        prev.map((item) => (item.id === participant.id ? { ...item, ...data.participant } : item))
+      );
+      setMessage('Participant updated.');
+    } finally {
+      setBusyParticipantId(null);
+      setBusyParticipantAction(null);
+    }
   };
 
   const handleDeleteParticipant = async (participant: Participant) => {
+    if (isLocked || busyParticipantId) return;
     if (!window.confirm(`Delete ${participant.display_name}?`)) return;
 
-    let res = await fetch(`/api/admin/participants/${participant.id}`, {
-      method: 'DELETE'
-    });
-
-    if (res.status === 409) {
-      const data = await res.json();
-      const confirmForce = window.confirm(
-        `${participant.display_name} owns ${data.ownedSquares} squares. Remove and unassign all?`
-      );
-      if (!confirmForce) return;
-      res = await fetch(`/api/admin/participants/${participant.id}?force=true`, {
+    setBusyParticipantId(participant.id);
+    setBusyParticipantAction('delete');
+    try {
+      let res = await fetch(`/api/admin/participants/${participant.id}`, {
         method: 'DELETE'
       });
-    }
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+      if (res.status === 409) {
+        const data = await res.json();
+        const confirmForce = window.confirm(
+          `${participant.display_name} owns ${data.ownedSquares} squares. Remove and unassign all?`
+        );
+        if (!confirmForce) return;
+        res = await fetch(`/api/admin/participants/${participant.id}?force=true`, {
+          method: 'DELETE'
+        });
+      }
+
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to delete participant'));
         return;
       }
-      setMessage(await readErrorMessage(res, 'Failed to delete participant'));
-      return;
-    }
 
-    setParticipants((prev) => prev.filter((item) => item.id !== participant.id));
-    setSquares((prev) =>
-      prev.map((square) =>
-        square.participant_id === participant.id ? { ...square, participant_id: null, participant_name: null } : square
-      )
-    );
-    setMessage('Participant deleted.');
+      setParticipants((prev) => prev.filter((item) => item.id !== participant.id));
+      setSquares((prev) =>
+        prev.map((square) =>
+          square.participant_id === participant.id ? { ...square, participant_id: null, participant_name: null } : square
+        )
+      );
+      setMessage('Participant deleted.');
+    } finally {
+      setBusyParticipantId(null);
+      setBusyParticipantAction(null);
+    }
   };
 
   const handleAssign = async () => {
-    if (!pool || !selectedSquare) return;
-    const res = await fetch(`/api/admin/pools/${pool.id}/squares`, {
-      method: 'PATCH',
-      headers: JSON_HEADERS,
-      body: JSON.stringify({
-        row_index: selectedSquare.row_index,
-        col_index: selectedSquare.col_index,
-        participant_id: assignParticipantId || null
-      })
-    });
+    if (!pool || !selectedSquare || isLocked || isAssigning) return;
+    setIsAssigning(true);
+    try {
+      const res = await fetch(`/api/admin/pools/${pool.id}/squares`, {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          row_index: selectedSquare.row_index,
+          col_index: selectedSquare.col_index,
+          participant_id: assignParticipantId || null
+        })
+      });
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to assign square'));
         return;
       }
-      setMessage(await readErrorMessage(res, 'Failed to assign square'));
-      return;
-    }
 
-    const data = await res.json();
-    const updatedSquare = data.square as Square;
-    setSquares((prev) => prev.map((square) => (square.id === updatedSquare.id ? updatedSquare : square)));
-    setSelectedSquare(updatedSquare);
-    if (pool) {
-      loadParticipants(pool.id);
+      const data = await res.json();
+      const updatedSquare = data.square as Square;
+      setSquares((prev) => prev.map((square) => (square.id === updatedSquare.id ? updatedSquare : square)));
+      setSelectedSquare(updatedSquare);
+      if (pool) {
+        loadParticipants(pool.id);
+      }
+      setMessage('Square assignment saved.');
+    } finally {
+      setIsAssigning(false);
     }
   };
 
   const callDigitAction = async (action: 'randomize' | 'reveal' | 'lock') => {
-    if (!pool) return;
+    if (!pool || digitActionLoading) return;
     if (!window.confirm(`Confirm ${action}?`)) return;
 
     const endpoint =
@@ -262,22 +341,30 @@ export default function AdminPage() {
         ? `/api/admin/pool/${pool.id}/lock`
         : `/api/admin/pool/${pool.id}/digits/${action}`;
 
-    const res = await fetch(endpoint, {
-      method: 'POST'
-    });
+    setDigitActionLoading(action);
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST'
+      });
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, `Failed to ${action} digits`));
         return;
       }
-      setMessage(await readErrorMessage(res, `Failed to ${action} digits`));
-      return;
-    }
 
-    const data = await res.json();
-    setDigitMap(data.digit_map ?? data);
-    setMessage(`${action} complete.`);
+      const data = await res.json();
+      setDigitMap(data.digit_map ?? data);
+      if (action === 'lock') {
+        setPool((prev) => (prev ? { ...prev, status: 'locked' } : prev));
+      }
+      setMessage(`${action} complete.`);
+    } finally {
+      setDigitActionLoading(null);
+    }
   };
 
   if (!sessionReady) {
@@ -307,46 +394,94 @@ export default function AdminPage() {
       {message && <div className="message">{message}</div>}
 
       <section className="panel">
+        <h2>Pool Status</h2>
+        {isLoadingPool ? (
+          <div className="skeleton-block" aria-label="Loading pool status" />
+        ) : pool ? (
+          <>
+            <div className={`status-pill status-pill--${pool.status}`}>
+              Status: {pool.status}
+            </div>
+            <p>{getStatusDescription(pool.status)}</p>
+            <p>
+              <strong>Locked at:</strong> {digitMap?.locked_at ?? 'not yet'}
+            </p>
+          </>
+        ) : (
+          <p className="hint">Pool status unavailable.</p>
+        )}
+      </section>
+
+      <section className="panel">
         <h2>Participants</h2>
+        {isLocked && <p className="hint">Pool is locked; participants cannot be changed.</p>}
         <div className="form-row">
           <input
             type="text"
             placeholder="Display name"
             value={newParticipantName}
             onChange={(event) => setNewParticipantName(event.target.value)}
+            disabled={isLocked || isCreatingParticipant}
           />
           <input
             type="text"
             placeholder="Contact info (optional)"
             value={newParticipantContact}
             onChange={(event) => setNewParticipantContact(event.target.value)}
+            disabled={isLocked || isCreatingParticipant}
           />
-          <button type="button" onClick={handleCreateParticipant}>
-            Add
+          <button type="button" onClick={handleCreateParticipant} disabled={isLocked || isCreatingParticipant}>
+            {isCreatingParticipant ? 'Adding...' : 'Add'}
           </button>
         </div>
-        <div className="table">
-          <div className="table-row table-header">
-            <span>Name</span>
-            <span>Squares</span>
-            <span>Actions</span>
-          </div>
-          {participants.map((participant) => (
-            <div className="table-row" key={participant.id}>
-              <span>{participant.display_name}</span>
-              <span>{participant.square_count ?? 0}</span>
-              <span className="actions">
-                <button type="button" onClick={() => handleEditParticipant(participant)}>
-                  Edit
-                </button>
-                <button type="button" onClick={() => handleDeleteParticipant(participant)}>
-                  Delete
-                </button>
-              </span>
+
+        {isLoadingParticipants ? (
+          <div className="table" aria-label="Loading participants">
+            <div className="table-row table-header">
+              <span>Name</span>
+              <span>Squares</span>
+              <span>Actions</span>
             </div>
-          ))}
-          {participants.length === 0 && <p className="hint">No participants yet.</p>}
-        </div>
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div className="table-row" key={`participant-skeleton-${idx}`}>
+                <span className="skeleton-line" />
+                <span className="skeleton-line" />
+                <span className="skeleton-line" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="table">
+            <div className="table-row table-header">
+              <span>Name</span>
+              <span>Squares</span>
+              <span>Actions</span>
+            </div>
+            {participants.map((participant) => (
+              <div className="table-row" key={participant.id}>
+                <span>{participant.display_name}</span>
+                <span>{participant.square_count ?? 0}</span>
+                <span className="actions">
+                  <button
+                    type="button"
+                    onClick={() => handleEditParticipant(participant)}
+                    disabled={isLocked || Boolean(busyParticipantId)}
+                  >
+                    {busyParticipantId === participant.id && busyParticipantAction === 'edit' ? 'Editing...' : 'Edit'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteParticipant(participant)}
+                    disabled={isLocked || Boolean(busyParticipantId)}
+                  >
+                    {busyParticipantId === participant.id && busyParticipantAction === 'delete' ? 'Deleting...' : 'Delete'}
+                  </button>
+                </span>
+              </div>
+            ))}
+            {!isLoadingParticipants && participants.length === 0 && <p className="hint">No participants yet.</p>}
+          </div>
+        )}
       </section>
 
       {pool && (
@@ -369,18 +504,41 @@ export default function AdminPage() {
 
       <section className="panel">
         <h2>Digit Map</h2>
+        {isLocked && <p className="hint">Pool is locked; digit changes are disabled.</p>}
+        {!digitMap && !isLoadingDigitMap && (
+          <p className="hint">Reveal is unavailable until digits are randomized.</p>
+        )}
+        {digitMap?.revealed_at && !isLoadingDigitMap && <p className="hint">Digits are already revealed.</p>}
         <div className="form-row">
-          <button type="button" onClick={() => callDigitAction('randomize')}>
-            Randomize
+          <button
+            type="button"
+            onClick={() => callDigitAction('randomize')}
+            disabled={randomizeDisabled}
+          >
+            {digitActionLoading === 'randomize' ? 'Randomizing...' : 'Randomize'}
           </button>
-          <button type="button" onClick={() => callDigitAction('reveal')}>
-            Reveal
+          <button
+            type="button"
+            onClick={() => callDigitAction('reveal')}
+            disabled={revealDisabled}
+          >
+            {digitActionLoading === 'reveal' ? 'Revealing...' : 'Reveal'}
           </button>
-          <button type="button" onClick={() => callDigitAction('lock')}>
-            Lock
+          <button
+            type="button"
+            onClick={() => callDigitAction('lock')}
+            disabled={lockDisabled}
+          >
+            {digitActionLoading === 'lock' ? 'Locking...' : 'Lock'}
           </button>
         </div>
-        {digitMap ? (
+        {isLoadingDigitMap ? (
+          <div className="stack" aria-label="Loading digit map">
+            <span className="skeleton-line" />
+            <span className="skeleton-line" />
+            <span className="skeleton-line" />
+          </div>
+        ) : digitMap ? (
           <div className="digit-map">
             <div>
               <strong>Winning digits:</strong> {digitMap.winning_digits.join(', ')}
@@ -399,40 +557,58 @@ export default function AdminPage() {
 
       <section className="panel">
         <h2>Grid</h2>
-        <p>Filled squares: {filledCount} / 100</p>
-        <div className="grid">
-          {grid.map((row, rowIndex) =>
-            row.map((square, colIndex) => {
-              const label = square?.participant_name ?? 'Unassigned';
-              return (
-                <button
-                  key={`${rowIndex}-${colIndex}`}
-                  className={`cell ${selectedSquare?.id === square?.id ? 'cell--active' : ''}`}
-                  type="button"
-                  onClick={() => {
-                    if (!square) return;
-                    setSelectedSquare(square);
-                    setAssignParticipantId(square.participant_id ?? '');
-                  }}
-                >
-                  <span>Row {rowIndex}, Col {colIndex}</span>
-                  <strong>{label}</strong>
-                </button>
-              );
-            })
-          )}
-        </div>
+        {isLoadingPool ? (
+          <div className="grid grid-skeleton" aria-label="Loading pool grid">
+            {Array.from({ length: 20 }).map((_, idx) => (
+              <div className="cell" key={`grid-skeleton-${idx}`}>
+                <span className="skeleton-line" />
+                <span className="skeleton-line" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <p>Filled squares: {filledCount} / 100</p>
+            <div className="grid">
+              {grid.map((row, rowIndex) =>
+                row.map((square, colIndex) => {
+                  const label = square?.participant_name ?? 'Unassigned';
+                  return (
+                    <button
+                      key={`${rowIndex}-${colIndex}`}
+                      className={`cell ${selectedSquare?.id === square?.id ? 'cell--active' : ''}`}
+                      type="button"
+                      onClick={() => {
+                        if (!square) return;
+                        setSelectedSquare(square);
+                        setAssignParticipantId(square.participant_id ?? '');
+                      }}
+                    >
+                      <span>Row {rowIndex}, Col {colIndex}</span>
+                      <strong>{label}</strong>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </>
+        )}
       </section>
 
       <section className="panel">
         <h2>Assign Square</h2>
+        {isLocked && <p className="hint">Pool is locked; assignments cannot be changed.</p>}
         {selectedSquare ? (
           <>
             <p>
               Selected: Row {selectedSquare.row_index}, Col {selectedSquare.col_index}
             </p>
             <div className="form-row">
-              <select value={assignParticipantId} onChange={(event) => setAssignParticipantId(event.target.value)}>
+              <select
+                value={assignParticipantId}
+                onChange={(event) => setAssignParticipantId(event.target.value)}
+                disabled={isLocked || isAssigning}
+              >
                 <option value="">Unassigned</option>
                 {participants.map((participant) => (
                   <option key={participant.id} value={participant.id}>
@@ -440,8 +616,8 @@ export default function AdminPage() {
                   </option>
                 ))}
               </select>
-              <button type="button" onClick={handleAssign}>
-                Save
+              <button type="button" onClick={handleAssign} disabled={isLocked || isAssigning}>
+                {isAssigning ? 'Saving...' : 'Save'}
               </button>
             </div>
           </>

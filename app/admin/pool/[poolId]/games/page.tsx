@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { AdminLogoutButton } from '@/components/admin-logout-button';
+import { AdminPoolNav } from '@/components/admin-pool-nav';
 import { useAdminSessionGuard } from '@/components/use-admin-session-guard';
 import { GAME_ROUND_KEYS, GAME_ROUND_LABELS, GAME_STATUSES, type GameRoundKey, type GameStatus } from '@/lib/games';
 
@@ -38,6 +39,10 @@ type FormState = {
   start_time: string;
 };
 
+type DigitMap = {
+  locked_at: string | null;
+};
+
 const emptyForm: FormState = {
   round_key: GAME_ROUND_KEYS[0],
   team_a: '',
@@ -71,122 +76,176 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
   const [message, setMessage] = useState('');
   const [games, setGames] = useState<EditableGame[]>([]);
   const [form, setForm] = useState<FormState>({ ...emptyForm });
+  const [isLoadingGames, setIsLoadingGames] = useState(false);
+  const [hasLoadedGames, setHasLoadedGames] = useState(false);
+  const [isPoolLocked, setIsPoolLocked] = useState(false);
+  const [isLoadingLockState, setIsLoadingLockState] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [savingGameId, setSavingGameId] = useState<string | null>(null);
+  const [deletingGameId, setDeletingGameId] = useState<string | null>(null);
 
   const loadGames = useCallback(async () => {
+    setIsLoadingGames(true);
     setMessage('');
-    const res = await fetch(`/api/admin/pool/${params.poolId}/games`, {
-      cache: 'no-store'
-    });
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+    try {
+      const res = await fetch(`/api/admin/pool/${params.poolId}/games`, {
+        cache: 'no-store'
+      });
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to load games'));
         return;
       }
-      setMessage(await readErrorMessage(res, 'Failed to load games'));
-      return;
+      const data = await res.json();
+      const nextGames = (data.games as GameRow[]).map((game) => ({
+        id: game.id,
+        round_key: game.round_key,
+        team_a: game.team_a,
+        team_b: game.team_b,
+        score_a: game.score_a === null ? '' : String(game.score_a),
+        score_b: game.score_b === null ? '' : String(game.score_b),
+        status: game.status,
+        start_time: toInputDate(game.start_time)
+      }));
+      setGames(nextGames);
+      setHasLoadedGames(true);
+    } finally {
+      setIsLoadingGames(false);
     }
-    const data = await res.json();
-    const nextGames = (data.games as GameRow[]).map((game) => ({
-      id: game.id,
-      round_key: game.round_key,
-      team_a: game.team_a,
-      team_b: game.team_b,
-      score_a: game.score_a === null ? '' : String(game.score_a),
-      score_b: game.score_b === null ? '' : String(game.score_b),
-      status: game.status,
-      start_time: toInputDate(game.start_time)
-    }));
-    setGames(nextGames);
+  }, [params.poolId]);
+
+  const loadLockState = useCallback(async () => {
+    setIsLoadingLockState(true);
+    try {
+      const res = await fetch(`/api/admin/pool/${params.poolId}/digits`, {
+        cache: 'no-store'
+      });
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to load pool lock status'));
+        return;
+      }
+      const data = (await res.json()) as { digit_map?: DigitMap | null };
+      setIsPoolLocked(Boolean(data.digit_map?.locked_at));
+    } finally {
+      setIsLoadingLockState(false);
+    }
   }, [params.poolId]);
 
   useEffect(() => {
     if (!sessionReady) return;
     loadGames();
-  }, [loadGames, sessionReady]);
+    loadLockState();
+  }, [loadGames, loadLockState, sessionReady]);
 
   const handleCreate = async () => {
+    if (isPoolLocked || isCreating) return;
     if (!form.team_a.trim() || !form.team_b.trim()) {
       setMessage('Team names are required.');
       return;
     }
 
-    const body = {
-      round_key: form.round_key,
-      team_a: form.team_a.trim(),
-      team_b: form.team_b.trim(),
-      status: form.status,
-      score_a: form.score_a === '' ? null : Number(form.score_a),
-      score_b: form.score_b === '' ? null : Number(form.score_b),
-      start_time: form.start_time || null
-    };
+    setIsCreating(true);
+    try {
+      const body = {
+        round_key: form.round_key,
+        team_a: form.team_a.trim(),
+        team_b: form.team_b.trim(),
+        status: form.status,
+        score_a: form.score_a === '' ? null : Number(form.score_a),
+        score_b: form.score_b === '' ? null : Number(form.score_b),
+        start_time: form.start_time || null
+      };
 
-    const res = await fetch(`/api/admin/pool/${params.poolId}/games`, {
-      method: 'POST',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(body)
-    });
+      const res = await fetch(`/api/admin/pool/${params.poolId}/games`, {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body)
+      });
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to create game'));
         return;
       }
-      setMessage(await readErrorMessage(res, 'Failed to create game'));
-      return;
-    }
 
-    setMessage('Game created.');
-    setForm({ ...emptyForm });
-    await loadGames();
+      setMessage('Game created.');
+      setForm({ ...emptyForm });
+      await loadGames();
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleUpdate = async (game: EditableGame) => {
-    const body = {
-      round_key: game.round_key,
-      team_a: game.team_a.trim(),
-      team_b: game.team_b.trim(),
-      status: game.status,
-      score_a: game.score_a === '' ? null : Number(game.score_a),
-      score_b: game.score_b === '' ? null : Number(game.score_b),
-      start_time: game.start_time || null
-    };
+    if (isPoolLocked || savingGameId || deletingGameId) return;
+    setSavingGameId(game.id);
+    try {
+      const body = {
+        round_key: game.round_key,
+        team_a: game.team_a.trim(),
+        team_b: game.team_b.trim(),
+        status: game.status,
+        score_a: game.score_a === '' ? null : Number(game.score_a),
+        score_b: game.score_b === '' ? null : Number(game.score_b),
+        start_time: game.start_time || null
+      };
 
-    const res = await fetch(`/api/admin/pool/${params.poolId}/games/${game.id}`, {
-      method: 'PATCH',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(body)
-    });
+      const res = await fetch(`/api/admin/pool/${params.poolId}/games/${game.id}`, {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(body)
+      });
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to update game'));
         return;
       }
-      setMessage(await readErrorMessage(res, 'Failed to update game'));
-      return;
-    }
 
-    setMessage('Game updated.');
-    await loadGames();
+      setMessage('Game updated.');
+      await loadGames();
+    } finally {
+      setSavingGameId(null);
+    }
   };
 
   const handleDelete = async (gameId: string) => {
+    if (isPoolLocked || savingGameId || deletingGameId) return;
     if (!window.confirm('Delete this game?')) return;
-    const res = await fetch(`/api/admin/pool/${params.poolId}/games/${gameId}`, {
-      method: 'DELETE'
-    });
 
-    if (!res.ok) {
-      if (res.status === 401 || res.status === 403) {
-        window.location.href = '/admin/login';
+    setDeletingGameId(gameId);
+    try {
+      const res = await fetch(`/api/admin/pool/${params.poolId}/games/${gameId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to delete game'));
         return;
       }
-      setMessage(await readErrorMessage(res, 'Failed to delete game'));
-      return;
-    }
 
-    setMessage('Game deleted.');
-    await loadGames();
+      setMessage('Game deleted.');
+      await loadGames();
+    } finally {
+      setDeletingGameId(null);
+    }
   };
 
   if (!sessionReady) {
@@ -205,15 +264,23 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
         <span className="badge">Admin</span>
         <h1>Games</h1>
         <p>Pool ID: {params.poolId}</p>
+        <AdminPoolNav poolId={params.poolId} activeKey="games" />
         <div className="form-row">
-          <a className="button-link button-secondary" href="/admin">
-            Back to Admin
-          </a>
           <AdminLogoutButton className="button-secondary" />
         </div>
       </header>
 
       {message && <div className="message">{message}</div>}
+
+      {(isPoolLocked || isLoadingLockState) && (
+        <section className="panel">
+          {isLoadingLockState ? (
+            <p className="hint">Loading pool status...</p>
+          ) : (
+            <p className="hint">Pool is locked; game create/update/delete actions are disabled.</p>
+          )}
+        </section>
+      )}
 
       <section className="panel">
         <h2>Create Game</h2>
@@ -221,6 +288,7 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
           <select
             value={form.round_key}
             onChange={(event) => setForm((prev) => ({ ...prev, round_key: event.target.value as GameRoundKey }))}
+            disabled={isPoolLocked || isCreating}
           >
             {GAME_ROUND_KEYS.map((key) => (
               <option key={key} value={key}>
@@ -233,16 +301,19 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
             placeholder="Team A"
             value={form.team_a}
             onChange={(event) => setForm((prev) => ({ ...prev, team_a: event.target.value }))}
+            disabled={isPoolLocked || isCreating}
           />
           <input
             type="text"
             placeholder="Team B"
             value={form.team_b}
             onChange={(event) => setForm((prev) => ({ ...prev, team_b: event.target.value }))}
+            disabled={isPoolLocked || isCreating}
           />
           <select
             value={form.status}
             onChange={(event) => setForm((prev) => ({ ...prev, status: event.target.value as GameStatus }))}
+            disabled={isPoolLocked || isCreating}
           >
             {GAME_STATUSES.map((status) => (
               <option key={status} value={status}>
@@ -256,6 +327,7 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
             placeholder="Score A"
             value={form.score_a}
             onChange={(event) => setForm((prev) => ({ ...prev, score_a: event.target.value }))}
+            disabled={isPoolLocked || isCreating}
           />
           <input
             type="number"
@@ -263,134 +335,168 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
             placeholder="Score B"
             value={form.score_b}
             onChange={(event) => setForm((prev) => ({ ...prev, score_b: event.target.value }))}
+            disabled={isPoolLocked || isCreating}
           />
           <input
             type="datetime-local"
             value={form.start_time}
             onChange={(event) => setForm((prev) => ({ ...prev, start_time: event.target.value }))}
+            disabled={isPoolLocked || isCreating}
           />
-          <button type="button" onClick={handleCreate}>
-            Create
+          <button type="button" onClick={handleCreate} disabled={isPoolLocked || isCreating}>
+            {isCreating ? 'Creating...' : 'Create'}
           </button>
         </div>
       </section>
 
       <section className="panel">
         <h2>Games</h2>
-        <div className="table">
-          <div className="table-row table-header">
-            <span>Round</span>
-            <span>Teams</span>
-            <span>Scores</span>
-            <span>Status</span>
-            <span>Start</span>
-            <span>Actions</span>
-          </div>
-          {games.map((game) => (
-            <div className="table-row" key={game.id}>
-              <span>
-                <select
-                  value={game.round_key}
-                  onChange={(event) =>
-                    setGames((prev) =>
-                      prev.map((item) =>
-                        item.id === game.id
-                          ? { ...item, round_key: event.target.value as GameRoundKey }
-                          : item
-                      )
-                    )
-                  }
-                >
-                  {GAME_ROUND_KEYS.map((key) => (
-                    <option key={key} value={key}>
-                      {GAME_ROUND_LABELS[key]}
-                    </option>
-                  ))}
-                </select>
-              </span>
-              <span className="stack">
-                <input
-                  type="text"
-                  value={game.team_a}
-                  onChange={(event) =>
-                    setGames((prev) =>
-                      prev.map((item) => (item.id === game.id ? { ...item, team_a: event.target.value } : item))
-                    )
-                  }
-                />
-                <input
-                  type="text"
-                  value={game.team_b}
-                  onChange={(event) =>
-                    setGames((prev) =>
-                      prev.map((item) => (item.id === game.id ? { ...item, team_b: event.target.value } : item))
-                    )
-                  }
-                />
-              </span>
-              <span className="stack">
-                <input
-                  type="number"
-                  min="0"
-                  value={game.score_a}
-                  onChange={(event) =>
-                    setGames((prev) =>
-                      prev.map((item) => (item.id === game.id ? { ...item, score_a: event.target.value } : item))
-                    )
-                  }
-                />
-                <input
-                  type="number"
-                  min="0"
-                  value={game.score_b}
-                  onChange={(event) =>
-                    setGames((prev) =>
-                      prev.map((item) => (item.id === game.id ? { ...item, score_b: event.target.value } : item))
-                    )
-                  }
-                />
-              </span>
-              <span>
-                <select
-                  value={game.status}
-                  onChange={(event) =>
-                    setGames((prev) =>
-                      prev.map((item) =>
-                        item.id === game.id ? { ...item, status: event.target.value as GameStatus } : item
-                      )
-                    )
-                  }
-                >
-                  {GAME_STATUSES.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
-              </span>
-              <span>
-                <input
-                  type="datetime-local"
-                  value={game.start_time}
-                  onChange={(event) =>
-                    setGames((prev) =>
-                      prev.map((item) => (item.id === game.id ? { ...item, start_time: event.target.value } : item))
-                    )
-                  }
-                />
-              </span>
-              <span className="actions">
-                <button type="button" onClick={() => handleUpdate(game)}>
-                  Save
-                </button>
-                <button type="button" onClick={() => handleDelete(game.id)}>
-                  Delete
-                </button>
-              </span>
+        {isLoadingGames && hasLoadedGames && <p className="hint">Refreshing games...</p>}
+        {isLoadingGames && !hasLoadedGames ? (
+          <div className="table" aria-label="Loading games">
+            <div className="table-row table-header">
+              <span>Round</span>
+              <span>Teams</span>
+              <span>Scores</span>
+              <span>Status</span>
+              <span>Start</span>
+              <span>Actions</span>
             </div>
-          ))}
-          {games.length === 0 && <p className="hint">No games yet.</p>}
-        </div>
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div className="table-row" key={`game-skeleton-${idx}`}>
+                <span className="skeleton-line" />
+                <span className="skeleton-line" />
+                <span className="skeleton-line" />
+                <span className="skeleton-line" />
+                <span className="skeleton-line" />
+                <span className="skeleton-line" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="table">
+            <div className="table-row table-header">
+              <span>Round</span>
+              <span>Teams</span>
+              <span>Scores</span>
+              <span>Status</span>
+              <span>Start</span>
+              <span>Actions</span>
+            </div>
+            {games.map((game) => {
+              const rowBusy = savingGameId === game.id || deletingGameId === game.id;
+              return (
+                <div className="table-row" key={game.id}>
+                  <span>
+                    <select
+                      value={game.round_key}
+                      onChange={(event) =>
+                        setGames((prev) =>
+                          prev.map((item) =>
+                            item.id === game.id ? { ...item, round_key: event.target.value as GameRoundKey } : item
+                          )
+                        )
+                      }
+                      disabled={isPoolLocked || rowBusy}
+                    >
+                      {GAME_ROUND_KEYS.map((key) => (
+                        <option key={key} value={key}>
+                          {GAME_ROUND_LABELS[key]}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                  <span className="stack">
+                    <input
+                      type="text"
+                      value={game.team_a}
+                      onChange={(event) =>
+                        setGames((prev) =>
+                          prev.map((item) => (item.id === game.id ? { ...item, team_a: event.target.value } : item))
+                        )
+                      }
+                      disabled={isPoolLocked || rowBusy}
+                    />
+                    <input
+                      type="text"
+                      value={game.team_b}
+                      onChange={(event) =>
+                        setGames((prev) =>
+                          prev.map((item) => (item.id === game.id ? { ...item, team_b: event.target.value } : item))
+                        )
+                      }
+                      disabled={isPoolLocked || rowBusy}
+                    />
+                  </span>
+                  <span className="stack">
+                    <input
+                      type="number"
+                      min="0"
+                      value={game.score_a}
+                      onChange={(event) =>
+                        setGames((prev) =>
+                          prev.map((item) => (item.id === game.id ? { ...item, score_a: event.target.value } : item))
+                        )
+                      }
+                      disabled={isPoolLocked || rowBusy}
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      value={game.score_b}
+                      onChange={(event) =>
+                        setGames((prev) =>
+                          prev.map((item) => (item.id === game.id ? { ...item, score_b: event.target.value } : item))
+                        )
+                      }
+                      disabled={isPoolLocked || rowBusy}
+                    />
+                  </span>
+                  <span>
+                    <select
+                      value={game.status}
+                      onChange={(event) =>
+                        setGames((prev) =>
+                          prev.map((item) =>
+                            item.id === game.id ? { ...item, status: event.target.value as GameStatus } : item
+                          )
+                        )
+                      }
+                      disabled={isPoolLocked || rowBusy}
+                    >
+                      {GAME_STATUSES.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </span>
+                  <span>
+                    <input
+                      type="datetime-local"
+                      value={game.start_time}
+                      onChange={(event) =>
+                        setGames((prev) =>
+                          prev.map((item) => (item.id === game.id ? { ...item, start_time: event.target.value } : item))
+                        )
+                      }
+                      disabled={isPoolLocked || rowBusy}
+                    />
+                  </span>
+                  <span className="actions">
+                    <button type="button" onClick={() => handleUpdate(game)} disabled={isPoolLocked || rowBusy}>
+                      {savingGameId === game.id ? 'Saving...' : 'Save'}
+                    </button>
+                    <button type="button" onClick={() => handleDelete(game.id)} disabled={isPoolLocked || rowBusy}>
+                      {deletingGameId === game.id ? 'Deleting...' : 'Delete'}
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+            {hasLoadedGames && games.length === 0 && <p className="hint">No games yet.</p>}
+          </div>
+        )}
       </section>
     </main>
   );
