@@ -78,3 +78,6 @@ npm run typecheck
 - After deploying this change, existing admins must sign in again to establish the new cookie session.
 - Admin pool tool pages include shared breadcrumb/sub-navigation for `Games`, `Payouts`, and `Audit`.
 - Admin UI now shows visible pool lock state and proactively disables lock-blocked actions before API submit.
+- Public grid and analytics heatmap keep fixed 10-column layouts on mobile using horizontal scrolling.
+- Analytics heatmap shows row/column digit headers with the same reveal visibility rules as the public grid.
+- Admin participants panel supports search, sort, and `0 squares` filtering, and the grid supports an unassigned-squares focus mode.

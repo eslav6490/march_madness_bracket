@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AdminLogoutButton } from '@/components/admin-logout-button';
 import { useAdminSessionGuard } from '@/components/use-admin-session-guard';
+import { deriveParticipantRows, type ParticipantSortOption } from '@/lib/participant-management-view';
 
 type Pool = {
   id: string;
@@ -72,6 +73,10 @@ export default function AdminPage() {
   const [newParticipantContact, setNewParticipantContact] = useState('');
   const [message, setMessage] = useState<string>('');
   const [digitMap, setDigitMap] = useState<DigitMap | null>(null);
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantSort, setParticipantSort] = useState<ParticipantSortOption>('name_asc');
+  const [showOnlyParticipantsWithNoSquares, setShowOnlyParticipantsWithNoSquares] = useState(false);
+  const [showOnlyUnassignedSquares, setShowOnlyUnassignedSquares] = useState(false);
 
   const [isLoadingPool, setIsLoadingPool] = useState(false);
   const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
@@ -164,6 +169,13 @@ export default function AdminPage() {
     }
   }, [pool, sessionReady, loadParticipants, loadDigitMap]);
 
+  useEffect(() => {
+    if (!showOnlyUnassignedSquares) return;
+    if (!selectedSquare?.participant_id) return;
+    setSelectedSquare(null);
+    setAssignParticipantId('');
+  }, [showOnlyUnassignedSquares, selectedSquare]);
+
   const grid = useMemo(() => {
     const base = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null) as Array<Square | null>);
     for (const square of squares) {
@@ -171,8 +183,18 @@ export default function AdminPage() {
     }
     return base;
   }, [squares]);
+  const visibleParticipants = useMemo(
+    () =>
+      deriveParticipantRows(participants, {
+        search: participantSearch,
+        sort: participantSort,
+        onlyWithoutSquares: showOnlyParticipantsWithNoSquares
+      }),
+    [participants, participantSearch, participantSort, showOnlyParticipantsWithNoSquares]
+  );
 
   const filledCount = squares.filter((square) => square.participant_id).length;
+  const unassignedCount = squares.length - filledCount;
   const isLocked = pool?.status === 'locked';
 
   const randomizeDisabled = !pool || isLocked || digitActionLoading !== null;
@@ -434,6 +456,34 @@ export default function AdminPage() {
             {isCreatingParticipant ? 'Adding...' : 'Add'}
           </button>
         </div>
+        <div className="form-row participant-controls">
+          <input
+            type="text"
+            placeholder="Search participants"
+            value={participantSearch}
+            onChange={(event) => setParticipantSearch(event.target.value)}
+          />
+          <select
+            value={participantSort}
+            onChange={(event) => setParticipantSort(event.target.value as ParticipantSortOption)}
+          >
+            <option value="name_asc">Name A→Z</option>
+            <option value="name_desc">Name Z→A</option>
+            <option value="squares_desc">Squares descending</option>
+            <option value="squares_asc">Squares ascending</option>
+          </select>
+          <label className="checkbox-control">
+            <input
+              type="checkbox"
+              checked={showOnlyParticipantsWithNoSquares}
+              onChange={(event) => setShowOnlyParticipantsWithNoSquares(event.target.checked)}
+            />
+            Show only participants with 0 squares
+          </label>
+        </div>
+        <p className="hint">
+          {visibleParticipants.length} of {participants.length} participants shown
+        </p>
 
         {isLoadingParticipants ? (
           <div className="table" aria-label="Loading participants">
@@ -457,7 +507,7 @@ export default function AdminPage() {
               <span>Squares</span>
               <span>Actions</span>
             </div>
-            {participants.map((participant) => (
+            {visibleParticipants.map((participant) => (
               <div className="table-row" key={participant.id}>
                 <span>{participant.display_name}</span>
                 <span>{participant.square_count ?? 0}</span>
@@ -479,7 +529,11 @@ export default function AdminPage() {
                 </span>
               </div>
             ))}
-            {!isLoadingParticipants && participants.length === 0 && <p className="hint">No participants yet.</p>}
+            {!isLoadingParticipants && visibleParticipants.length === 0 && (
+              <p className="hint">
+                {participants.length === 0 ? 'No participants yet.' : 'No participants match the current filters.'}
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -569,17 +623,31 @@ export default function AdminPage() {
         ) : (
           <>
             <p>Filled squares: {filledCount} / 100</p>
+            <p className="hint">{unassignedCount} unassigned squares remaining</p>
+            <label className="checkbox-control">
+              <input
+                type="checkbox"
+                checked={showOnlyUnassignedSquares}
+                onChange={(event) => setShowOnlyUnassignedSquares(event.target.checked)}
+              />
+              Show only unassigned squares
+            </label>
             <div className="grid">
               {grid.map((row, rowIndex) =>
                 row.map((square, colIndex) => {
                   const label = square?.participant_name ?? 'Unassigned';
+                  const shouldDeemphasize = showOnlyUnassignedSquares && Boolean(square?.participant_id);
+                  const isSelectable = Boolean(square) && !shouldDeemphasize;
                   return (
                     <button
                       key={`${rowIndex}-${colIndex}`}
-                      className={`cell ${selectedSquare?.id === square?.id ? 'cell--active' : ''}`}
+                      className={`cell ${selectedSquare?.id === square?.id ? 'cell--active' : ''} ${
+                        shouldDeemphasize ? 'cell--dimmed' : ''
+                      }`}
                       type="button"
+                      disabled={!isSelectable}
                       onClick={() => {
-                        if (!square) return;
+                        if (!square || !isSelectable) return;
                         setSelectedSquare(square);
                         setAssignParticipantId(square.participant_id ?? '');
                       }}
