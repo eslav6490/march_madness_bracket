@@ -1,6 +1,9 @@
+import React from 'react';
+
 import { getDb } from '@/lib/db';
 import { getDigitMap, isDigitsVisible } from '@/lib/digits';
 import { ensureDefaultPool, getPoolWithSquares, GRID_SIZE } from '@/lib/pools';
+import { PublicNav } from '@/components/public-nav';
 
 export default async function HomePage() {
   const db = getDb();
@@ -22,17 +25,7 @@ export default async function HomePage() {
         <span className="badge">Public Grid</span>
         <h1>{pool.name}</h1>
         <p>Pool ID: {pool.id}</p>
-        <div className="actions">
-          <a className="button-link button-secondary" href="/payouts">
-            Payouts
-          </a>
-          <a className="button-link button-secondary" href={`/pool/${pool.id}/results`}>
-            Results
-          </a>
-          <a className="button-link button-secondary" href={`/pool/${pool.id}/analytics`}>
-            Analytics
-          </a>
-        </div>
+        <PublicNav poolId={pool.id} activeKey="grid" />
       </header>
       <section className="grid grid--with-headers">
         <div className="cell cell--header"></div>

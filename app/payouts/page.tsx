@@ -1,6 +1,9 @@
+import React from 'react';
+
 import { getDb } from '@/lib/db';
 import { getLatestPayouts, ROUND_KEYS, ROUND_LABELS } from '@/lib/payouts';
 import { ensureDefaultPool } from '@/lib/pools';
+import { PublicNav } from '@/components/public-nav';
 
 const currency = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -19,6 +22,7 @@ export default async function PayoutsPage() {
         <h1>Payouts</h1>
         <p>Pool ID: {poolId}</p>
         <p>Last updated: {data.last_updated ? data.last_updated.toISOString() : 'n/a'}</p>
+        <PublicNav poolId={poolId} activeKey="payouts" />
       </header>
       <section className="panel">
         <div className="table">

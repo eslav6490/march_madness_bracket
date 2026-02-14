@@ -2,6 +2,7 @@ import React from 'react';
 
 import { GAME_ROUND_KEYS, GAME_ROUND_LABELS, type GameRoundKey } from '@/lib/games';
 import type { PoolResultRow } from '@/lib/results';
+import { PublicNav } from '@/components/public-nav';
 
 import { GET as getResults } from '../../../api/pool/[poolId]/results/route';
 
@@ -33,6 +34,7 @@ export default async function PoolResultsPage({ params }: { params: { poolId: st
           <span className="badge">Public Results</span>
           <h1>Results</h1>
           <p>Pool ID: {params.poolId}</p>
+          <PublicNav poolId={params.poolId} activeKey="results" />
         </header>
         <section className="panel">
           <p>{message}</p>
@@ -54,6 +56,7 @@ export default async function PoolResultsPage({ params }: { params: { poolId: st
         <span className="badge">Public Results</span>
         <h1>Results</h1>
         <p>Pool ID: {params.poolId}</p>
+        <PublicNav poolId={params.poolId} activeKey="results" />
       </header>
 
       <section className="panel">
