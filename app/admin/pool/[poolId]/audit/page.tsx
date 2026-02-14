@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { AdminLogoutButton } from '@/components/admin-logout-button';
 import { AdminPoolNav } from '@/components/admin-pool-nav';
@@ -36,9 +36,10 @@ export default function AdminAuditPage({ params }: { params: { poolId: string } 
   const [loading, setLoading] = useState(false);
   const [loadingMode, setLoadingMode] = useState<'reset' | 'more'>('reset');
   const [hasLoaded, setHasLoaded] = useState(false);
+  const cursorRef = useRef<Cursor>(null);
 
   const load = useCallback(
-    async (mode: 'reset' | 'more') => {
+    async (mode: 'reset' | 'more', cursorOverride?: Cursor) => {
       if (!sessionReady) return;
       setLoading(true);
       setLoadingMode(mode);
@@ -46,7 +47,7 @@ export default function AdminAuditPage({ params }: { params: { poolId: string } 
       try {
         const sp = new URLSearchParams();
         sp.set('limit', '50');
-        const useCursor = mode === 'more' ? cursor : null;
+        const useCursor = mode === 'more' ? cursorOverride ?? cursorRef.current : null;
         if (useCursor) {
           sp.set('before', useCursor.before);
           sp.set('before_id', useCursor.before_id);
@@ -66,6 +67,7 @@ export default function AdminAuditPage({ params }: { params: { poolId: string } 
         const data = await res.json();
         const nextEvents = (data.events ?? []) as AuditEvent[];
         const nextCursor = (data.next_cursor ?? null) as Cursor;
+        cursorRef.current = nextCursor;
         setCursor(nextCursor);
         setEvents((prev) => (mode === 'reset' ? nextEvents : [...prev, ...nextEvents]));
         setHasLoaded(true);
@@ -73,7 +75,7 @@ export default function AdminAuditPage({ params }: { params: { poolId: string } 
         setLoading(false);
       }
     },
-    [cursor, params.poolId, sessionReady]
+    [params.poolId, sessionReady]
   );
 
   useEffect(() => {

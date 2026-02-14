@@ -44,7 +44,6 @@ export default async function HomePage() {
               </div>
               {row.map((square, colIndex) => (
                 <div className="cell" key={`${rowIndex}-${colIndex}`}>
-                  <span>Row {rowIndex}, Col {colIndex}</span>
                   <strong>{square?.participant_name ?? 'Unassigned'}</strong>
                 </div>
               ))}
