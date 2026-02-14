@@ -349,6 +349,24 @@ export default function AdminPage() {
         </div>
       </section>
 
+      {pool && (
+        <section className="panel">
+          <h2>Pool Navigation</h2>
+          <p className="hint">Jump to games, payouts, and audit tools for this pool.</p>
+          <div className="form-row">
+            <a className="button-link" href={`/admin/pool/${pool.id}/games`}>
+              Games
+            </a>
+            <a className="button-link" href={`/admin/pool/${pool.id}/payouts`}>
+              Payouts
+            </a>
+            <a className="button-link" href={`/admin/pool/${pool.id}/audit`}>
+              Audit Log
+            </a>
+          </div>
+        </section>
+      )}
+
       <section className="panel">
         <h2>Digit Map</h2>
         <div className="form-row">
@@ -378,18 +396,6 @@ export default function AdminPage() {
           <p className="hint">No digit map yet. Randomize to generate digits.</p>
         )}
       </section>
-
-      {pool && (
-        <section className="panel">
-          <h2>Audit Log</h2>
-          <p className="hint">View recent admin actions for this pool.</p>
-          <div className="form-row">
-            <a className="button-link" href={`/admin/pool/${pool.id}/audit`}>
-              View Audit
-            </a>
-          </div>
-        </section>
-      )}
 
       <section className="panel">
         <h2>Grid</h2>
