@@ -2,9 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { requireAdmin } from '@/lib/admin';
+import { encodeAdminSession } from '@/lib/admin-session';
 
 const AUTH_ENV_KEYS = [
   'ADMIN_TOKEN',
+  'ADMIN_SESSION_SECRET',
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',
   'NEXT_PUBLIC_SUPABASE_URL',
@@ -45,6 +47,58 @@ describe('admin guard', () => {
 
     const response = await requireAdmin(request);
     expect(response).toBeNull();
+  });
+
+  it('allows requests with a valid admin session cookie', async () => {
+    process.env.ADMIN_SESSION_SECRET = 'test-secret';
+    const cookie = encodeAdminSession({
+      sub: 'admin-user',
+      exp: Math.floor(Date.now() / 1000) + 60,
+      role_snapshot: 'admin'
+    });
+    expect(cookie).toBeTruthy();
+
+    const request = new Request('http://localhost/api/admin/test', {
+      headers: {
+        cookie: `admin_session=${encodeURIComponent(cookie ?? '')}`
+      }
+    });
+
+    const response = await requireAdmin(request);
+    expect(response).toBeNull();
+  });
+
+  it('blocks expired admin session cookies and clears cookie', async () => {
+    process.env.ADMIN_SESSION_SECRET = 'test-secret';
+    const cookie = encodeAdminSession({
+      sub: 'admin-user',
+      exp: Math.floor(Date.now() / 1000) - 1,
+      role_snapshot: 'admin'
+    });
+    expect(cookie).toBeTruthy();
+
+    const request = new Request('http://localhost/api/admin/test', {
+      headers: {
+        cookie: `admin_session=${encodeURIComponent(cookie ?? '')}`
+      }
+    });
+
+    const response = await requireAdmin(request);
+    expect(response?.status).toBe(403);
+    expect(response?.headers.get('set-cookie')).toContain('admin_session=');
+  });
+
+  it('blocks tampered admin session cookies', async () => {
+    process.env.ADMIN_SESSION_SECRET = 'test-secret';
+    const request = new Request('http://localhost/api/admin/test', {
+      headers: {
+        cookie: 'admin_session=not-a-real-session'
+      }
+    });
+
+    const response = await requireAdmin(request);
+    expect(response?.status).toBe(403);
+    expect(response?.headers.get('set-cookie')).toContain('admin_session=');
   });
 
   it('allows requests with a Supabase bearer token for admin users', async () => {

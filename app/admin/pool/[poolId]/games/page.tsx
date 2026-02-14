@@ -1,7 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
+import { AdminLogoutButton } from '@/components/admin-logout-button';
+import { useAdminSessionGuard } from '@/components/use-admin-session-guard';
 import { GAME_ROUND_KEYS, GAME_ROUND_LABELS, GAME_STATUSES, type GameRoundKey, type GameStatus } from '@/lib/games';
 
 type GameRow = {
@@ -46,6 +48,17 @@ const emptyForm: FormState = {
   start_time: ''
 };
 
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+async function readErrorMessage(response: Response, fallback: string) {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function toInputDate(value: string | null) {
   if (!value) return '';
   const date = new Date(value);
@@ -54,35 +67,22 @@ function toInputDate(value: string | null) {
 }
 
 export default function AdminGamesPage({ params }: { params: { poolId: string } }) {
-  const [token, setToken] = useState('');
+  const sessionReady = useAdminSessionGuard();
   const [message, setMessage] = useState('');
   const [games, setGames] = useState<EditableGame[]>([]);
   const [form, setForm] = useState<FormState>({ ...emptyForm });
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem('adminToken');
-    if (stored) {
-      setToken(stored);
-    }
-  }, []);
-
-  const authHeaders = useMemo(() => {
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    return headers;
-  }, [token]);
-
   const loadGames = useCallback(async () => {
     setMessage('');
     const res = await fetch(`/api/admin/pool/${params.poolId}/games`, {
-      headers: authHeaders,
       cache: 'no-store'
     });
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to load games');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to load games'));
       return;
     }
     const data = await res.json();
@@ -97,18 +97,12 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
       start_time: toInputDate(game.start_time)
     }));
     setGames(nextGames);
-  }, [authHeaders, params.poolId]);
+  }, [params.poolId]);
 
   useEffect(() => {
-    if (token) {
-      loadGames();
-    }
-  }, [token, loadGames]);
-
-  const handleSaveToken = () => {
-    window.localStorage.setItem('adminToken', token);
-    setMessage('Session token saved.');
-  };
+    if (!sessionReady) return;
+    loadGames();
+  }, [loadGames, sessionReady]);
 
   const handleCreate = async () => {
     if (!form.team_a.trim() || !form.team_b.trim()) {
@@ -128,13 +122,16 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
 
     const res = await fetch(`/api/admin/pool/${params.poolId}/games`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: JSON_HEADERS,
       body: JSON.stringify(body)
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to create game');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to create game'));
       return;
     }
 
@@ -156,13 +153,16 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
 
     const res = await fetch(`/api/admin/pool/${params.poolId}/games/${game.id}`, {
       method: 'PATCH',
-      headers: authHeaders,
+      headers: JSON_HEADERS,
       body: JSON.stringify(body)
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to update game');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to update game'));
       return;
     }
 
@@ -173,13 +173,15 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
   const handleDelete = async (gameId: string) => {
     if (!window.confirm('Delete this game?')) return;
     const res = await fetch(`/api/admin/pool/${params.poolId}/games/${gameId}`, {
-      method: 'DELETE',
-      headers: authHeaders
+      method: 'DELETE'
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to delete game');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to delete game'));
       return;
     }
 
@@ -187,31 +189,29 @@ export default function AdminGamesPage({ params }: { params: { poolId: string } 
     await loadGames();
   };
 
+  if (!sessionReady) {
+    return (
+      <main>
+        <section className="panel">
+          <p>Checking admin session...</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main>
       <header>
         <span className="badge">Admin</span>
         <h1>Games</h1>
         <p>Pool ID: {params.poolId}</p>
-      </header>
-
-      <section className="panel">
-        <h2>Admin Session</h2>
         <div className="form-row">
-          <input
-            type="password"
-            placeholder="Supabase access token"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-          />
-          <button type="button" onClick={handleSaveToken}>
-            Save Session
-          </button>
-          <a className="button-link" href="/admin/login">
-            Login
+          <a className="button-link button-secondary" href="/admin">
+            Back to Admin
           </a>
+          <AdminLogoutButton className="button-secondary" />
         </div>
-      </section>
+      </header>
 
       {message && <div className="message">{message}</div>}
 

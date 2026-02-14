@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createPoolWithSquares } from '@/lib/pools';
+import { encodeAdminSession } from '@/lib/admin-session';
 import { createTestDb } from './helpers/db';
 
 const ADMIN_TOKEN = 'test-admin';
@@ -16,6 +17,7 @@ describe('games admin and public API', () => {
 
   afterEach(async () => {
     await db.end();
+    delete process.env.ADMIN_SESSION_SECRET;
     vi.resetModules();
     vi.clearAllMocks();
   });
@@ -78,6 +80,31 @@ describe('games admin and public API', () => {
 
     const response = await GET(new Request('http://localhost'), { params: { poolId } });
     expect(response.status).toBe(403);
+  });
+
+  it('accepts valid admin session cookies on admin endpoints', async () => {
+    const poolId = await createPoolWithSquares(db, 'Cookie Auth Pool');
+    process.env.ADMIN_SESSION_SECRET = 'test-session-secret';
+
+    const cookie = encodeAdminSession({
+      sub: 'admin-user',
+      exp: Math.floor(Date.now() / 1000) + 120,
+      role_snapshot: 'admin'
+    });
+    expect(cookie).toBeTruthy();
+
+    vi.doMock('@/lib/db', () => ({ getDb: () => db }));
+    const { GET } = await import('../app/api/admin/pool/[poolId]/games/route');
+
+    const response = await GET(
+      new Request('http://localhost', {
+        headers: {
+          cookie: `admin_session=${encodeURIComponent(cookie ?? '')}`
+        }
+      }),
+      { params: { poolId } }
+    );
+    expect(response.status).toBe(200);
   });
 
   it('patch updates scores and status', async () => {
