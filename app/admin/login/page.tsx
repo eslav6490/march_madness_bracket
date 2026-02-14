@@ -1,13 +1,11 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
-
-const TOKEN_STORAGE_KEY = 'adminToken';
+import { FormEvent, useEffect, useState } from 'react';
 
 type AuthResponse = {
-  access_token?: string;
-  error_description?: string;
-  msg?: string;
+  authenticated?: boolean;
+  is_admin?: boolean;
+  error?: string;
 };
 
 export default function AdminLoginPage() {
@@ -16,36 +14,48 @@ export default function AdminLoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkSession() {
+      try {
+        const response = await fetch('/api/admin/auth/session', { cache: 'no-store' });
+        const data = (await response.json()) as AuthResponse;
+        if (!cancelled && response.ok && data.authenticated && data.is_admin) {
+          window.location.href = '/admin';
+        }
+      } catch {
+        // Ignore bootstrap session checks when offline/unavailable.
+      }
+    }
+
+    checkSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setMessage('');
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseAnonKey) {
-      setMessage('Supabase auth is not configured in NEXT_PUBLIC env vars.');
-      setLoading(false);
-      return;
-    }
-
-    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+    const response = await fetch('/api/admin/auth/login', {
       method: 'POST',
       headers: {
-        apikey: supabaseAnonKey,
         'content-type': 'application/json'
       },
       body: JSON.stringify({ email, password })
     });
 
     const data = (await response.json()) as AuthResponse;
-    if (!response.ok || !data.access_token) {
-      setMessage(data.error_description ?? data.msg ?? 'Login failed.');
+    if (!response.ok || !data.authenticated) {
+      setMessage(data.error ?? 'Login failed.');
       setLoading(false);
       return;
     }
 
-    window.localStorage.setItem(TOKEN_STORAGE_KEY, data.access_token);
     window.location.href = '/admin';
   };
 
@@ -89,7 +99,7 @@ export default function AdminLoginPage() {
             </a>
           </div>
         </form>
-        <p className="hint">Your Supabase JWT must include an admin role in metadata.</p>
+        <p className="hint">Your session is stored in a secure HttpOnly cookie.</p>
       </section>
 
       {message && <div className="message">{message}</div>}

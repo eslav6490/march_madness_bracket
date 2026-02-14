@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 
+import { AdminLogoutButton } from '@/components/admin-logout-button';
+import { useAdminSessionGuard } from '@/components/use-admin-session-guard';
 import { ROUND_KEYS, ROUND_LABELS, type RoundKey } from '@/lib/payouts';
 
 type PayoutResponse = {
@@ -14,38 +16,36 @@ const emptyPayouts = ROUND_KEYS.reduce((acc, key) => {
   return acc;
 }, {} as Record<RoundKey, string>);
 
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+async function readErrorMessage(response: Response, fallback: string) {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function AdminPayoutsPage({ params }: { params: { poolId: string } }) {
-  const [token, setToken] = useState('');
+  const sessionReady = useAdminSessionGuard();
   const [payouts, setPayouts] = useState<Record<RoundKey, string>>(emptyPayouts);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [message, setMessage] = useState<string>('');
 
   useEffect(() => {
-    const stored = window.localStorage.getItem('adminToken');
-    if (stored) {
-      setToken(stored);
-    }
-  }, []);
-
-  const authHeaders = useMemo(() => {
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    return headers;
-  }, [token]);
-
-  useEffect(() => {
     async function load() {
       setMessage('');
       const res = await fetch(`/api/admin/pool/${params.poolId}/payouts`, {
-        headers: authHeaders,
         cache: 'no-store'
       });
 
       if (!res.ok) {
-        const error = await res.json();
-        setMessage(error.error ?? 'Failed to load payouts');
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to load payouts'));
         return;
       }
 
@@ -58,15 +58,9 @@ export default function AdminPayoutsPage({ params }: { params: { poolId: string 
       setLastUpdated(data.last_updated ?? null);
     }
 
-    if (token) {
-      load();
-    }
-  }, [authHeaders, params.poolId, token]);
-
-  const handleSaveToken = () => {
-    window.localStorage.setItem('adminToken', token);
-    setMessage('Session token saved.');
-  };
+    if (!sessionReady) return;
+    load();
+  }, [params.poolId, sessionReady]);
 
   const handleChange = (roundKey: RoundKey, value: string) => {
     setPayouts((prev) => ({ ...prev, [roundKey]: value }));
@@ -86,13 +80,16 @@ export default function AdminPayoutsPage({ params }: { params: { poolId: string 
 
     const res = await fetch(`/api/admin/pool/${params.poolId}/payouts`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: JSON_HEADERS,
       body: JSON.stringify({ payouts: payload })
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to save payouts');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to save payouts'));
       return;
     }
 
@@ -106,31 +103,29 @@ export default function AdminPayoutsPage({ params }: { params: { poolId: string 
     setMessage('Payouts updated.');
   };
 
+  if (!sessionReady) {
+    return (
+      <main>
+        <section className="panel">
+          <p>Checking admin session...</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main>
       <header>
         <span className="badge">Admin</span>
         <h1>Pool Payouts</h1>
         <p>Pool ID: {params.poolId}</p>
-      </header>
-
-      <section className="panel">
-        <h2>Admin Session</h2>
         <div className="form-row">
-          <input
-            type="password"
-            placeholder="Supabase access token"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-          />
-          <button type="button" onClick={handleSaveToken}>
-            Save Session
-          </button>
-          <a className="button-link" href="/admin/login">
-            Login
+          <a className="button-link button-secondary" href="/admin">
+            Back to Admin
           </a>
+          <AdminLogoutButton className="button-secondary" />
         </div>
-      </section>
+      </header>
 
       {message && <div className="message">{message}</div>}
 

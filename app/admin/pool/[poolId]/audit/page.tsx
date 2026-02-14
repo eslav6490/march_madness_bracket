@@ -1,6 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { AdminLogoutButton } from '@/components/admin-logout-button';
+import { useAdminSessionGuard } from '@/components/use-admin-session-guard';
 
 type AuditEvent = {
   id: string;
@@ -15,31 +18,25 @@ type AuditEvent = {
 
 type Cursor = { before: string; before_id: string } | null;
 
+async function readErrorMessage(response: Response, fallback: string) {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export default function AdminAuditPage({ params }: { params: { poolId: string } }) {
-  const [token, setToken] = useState('');
+  const sessionReady = useAdminSessionGuard();
   const [message, setMessage] = useState('');
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [cursor, setCursor] = useState<Cursor>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const stored = window.localStorage.getItem('adminToken');
-    if (stored) {
-      setToken(stored);
-    }
-  }, []);
-
-  const authHeaders = useMemo(() => {
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    return headers;
-  }, [token]);
-
   const load = useCallback(
     async (mode: 'reset' | 'more') => {
-      if (!token) return;
+      if (!sessionReady) return;
       setLoading(true);
       setMessage('');
       try {
@@ -52,12 +49,14 @@ export default function AdminAuditPage({ params }: { params: { poolId: string } 
         }
 
         const res = await fetch(`/api/admin/pool/${params.poolId}/audit?${sp.toString()}`, {
-          headers: authHeaders,
           cache: 'no-store'
         });
         if (!res.ok) {
-          const error = await res.json();
-          setMessage(error.error ?? 'Failed to load audit events');
+          if (res.status === 401 || res.status === 403) {
+            window.location.href = '/admin/login';
+            return;
+          }
+          setMessage(await readErrorMessage(res, 'Failed to load audit events'));
           return;
         }
         const data = await res.json();
@@ -69,20 +68,23 @@ export default function AdminAuditPage({ params }: { params: { poolId: string } 
         setLoading(false);
       }
     },
-    [authHeaders, cursor, params.poolId, token]
+    [cursor, params.poolId, sessionReady]
   );
 
   useEffect(() => {
-    if (token) {
-      load('reset');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    if (!sessionReady) return;
+    load('reset');
+  }, [load, sessionReady]);
 
-  const handleSaveToken = () => {
-    window.localStorage.setItem('adminToken', token);
-    setMessage('Session token saved.');
-  };
+  if (!sessionReady) {
+    return (
+      <main>
+        <section className="panel">
+          <p>Checking admin session...</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main>
@@ -90,25 +92,13 @@ export default function AdminAuditPage({ params }: { params: { poolId: string } 
         <span className="badge">Admin</span>
         <h1>Audit Log</h1>
         <p>Pool ID: {params.poolId}</p>
-      </header>
-
-      <section className="panel">
-        <h2>Admin Session</h2>
         <div className="form-row">
-          <input
-            type="password"
-            placeholder="Supabase access token"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-          />
-          <button type="button" onClick={handleSaveToken}>
-            Save Session
-          </button>
-          <a className="button-link" href="/admin/login">
-            Login
+          <a className="button-link button-secondary" href="/admin">
+            Back to Admin
           </a>
+          <AdminLogoutButton className="button-secondary" />
         </div>
-      </section>
+      </header>
 
       {message && <div className="message">{message}</div>}
 
@@ -136,10 +126,10 @@ export default function AdminAuditPage({ params }: { params: { poolId: string } 
         </div>
 
         <div className="form-row">
-          <button type="button" onClick={() => load('reset')} disabled={loading || !token}>
+          <button type="button" onClick={() => load('reset')} disabled={loading || !sessionReady}>
             Refresh
           </button>
-          <button type="button" onClick={() => load('more')} disabled={loading || !cursor || !token}>
+          <button type="button" onClick={() => load('more')} disabled={loading || !cursor || !sessionReady}>
             Load More
           </button>
         </div>

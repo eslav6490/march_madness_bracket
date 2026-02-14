@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { AdminLogoutButton } from '@/components/admin-logout-button';
+import { useAdminSessionGuard } from '@/components/use-admin-session-guard';
+
 type Pool = {
   id: string;
   name: string;
@@ -30,9 +33,19 @@ type DigitMap = {
 };
 
 const GRID_SIZE = 10;
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
+async function readErrorMessage(response: Response, fallback: string) {
+  try {
+    const body = (await response.json()) as { error?: string };
+    return body.error ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 export default function AdminPage() {
-  const [token, setToken] = useState('');
+  const sessionReady = useAdminSessionGuard();
   const [pool, setPool] = useState<Pool | null>(null);
   const [squares, setSquares] = useState<Square[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
@@ -42,21 +55,6 @@ export default function AdminPage() {
   const [newParticipantContact, setNewParticipantContact] = useState('');
   const [message, setMessage] = useState<string>('');
   const [digitMap, setDigitMap] = useState<DigitMap | null>(null);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem('adminToken');
-    if (stored) {
-      setToken(stored);
-    }
-  }, []);
-
-  const authHeaders = useMemo(() => {
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    return headers;
-  }, [token]);
 
   const loadPool = useCallback(async () => {
     const res = await fetch('/api/pool', { cache: 'no-store' });
@@ -68,35 +66,39 @@ export default function AdminPage() {
   const loadParticipants = useCallback(
     async (poolId: string) => {
       const res = await fetch(`/api/admin/pools/${poolId}/participants`, {
-        headers: authHeaders,
         cache: 'no-store'
       });
       if (!res.ok) {
-        const error = await res.json();
-        setMessage(error.error ?? 'Failed to load participants');
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to load participants'));
         return;
       }
       const data = await res.json();
       setParticipants(data.participants ?? []);
     },
-    [authHeaders]
+    []
   );
 
   const loadDigitMap = useCallback(
     async (poolId: string) => {
       const res = await fetch(`/api/admin/pool/${poolId}/digits`, {
-        headers: authHeaders,
         cache: 'no-store'
       });
       if (!res.ok) {
-        const error = await res.json();
-        setMessage(error.error ?? 'Failed to load digit map');
+        if (res.status === 401 || res.status === 403) {
+          window.location.href = '/admin/login';
+          return;
+        }
+        setMessage(await readErrorMessage(res, 'Failed to load digit map'));
         return;
       }
       const data = await res.json();
       setDigitMap(data.digit_map ?? null);
     },
-    [authHeaders]
+    []
   );
 
   const loadAll = useCallback(async () => {
@@ -105,15 +107,16 @@ export default function AdminPage() {
   }, [loadPool]);
 
   useEffect(() => {
+    if (!sessionReady) return;
     loadAll();
-  }, [loadAll]);
+  }, [loadAll, sessionReady]);
 
   useEffect(() => {
-    if (pool && token) {
+    if (pool && sessionReady) {
       loadParticipants(pool.id);
       loadDigitMap(pool.id);
     }
-  }, [pool, token, loadParticipants, loadDigitMap]);
+  }, [pool, sessionReady, loadParticipants, loadDigitMap]);
 
   const grid = useMemo(() => {
     const base = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(null) as Array<Square | null>);
@@ -125,14 +128,6 @@ export default function AdminPage() {
 
   const filledCount = squares.filter((square) => square.participant_id).length;
 
-  const handleSaveToken = () => {
-    window.localStorage.setItem('adminToken', token);
-    setMessage('Session token saved.');
-    if (pool) {
-      loadParticipants(pool.id);
-    }
-  };
-
   const handleCreateParticipant = async () => {
     if (!pool) return;
     if (!newParticipantName.trim()) {
@@ -142,7 +137,7 @@ export default function AdminPage() {
 
     const res = await fetch(`/api/admin/pools/${pool.id}/participants`, {
       method: 'POST',
-      headers: authHeaders,
+      headers: JSON_HEADERS,
       body: JSON.stringify({
         display_name: newParticipantName.trim(),
         contact_info: newParticipantContact.trim() || null
@@ -150,8 +145,11 @@ export default function AdminPage() {
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to create participant');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to create participant'));
       return;
     }
 
@@ -169,13 +167,16 @@ export default function AdminPage() {
 
     const res = await fetch(`/api/admin/participants/${participant.id}`, {
       method: 'PATCH',
-      headers: authHeaders,
+      headers: JSON_HEADERS,
       body: JSON.stringify({ display_name: displayName.trim(), contact_info: contactInfo.trim() || null })
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to update participant');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to update participant'));
       return;
     }
 
@@ -190,8 +191,7 @@ export default function AdminPage() {
     if (!window.confirm(`Delete ${participant.display_name}?`)) return;
 
     let res = await fetch(`/api/admin/participants/${participant.id}`, {
-      method: 'DELETE',
-      headers: authHeaders
+      method: 'DELETE'
     });
 
     if (res.status === 409) {
@@ -201,14 +201,16 @@ export default function AdminPage() {
       );
       if (!confirmForce) return;
       res = await fetch(`/api/admin/participants/${participant.id}?force=true`, {
-        method: 'DELETE',
-        headers: authHeaders
+        method: 'DELETE'
       });
     }
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to delete participant');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to delete participant'));
       return;
     }
 
@@ -225,7 +227,7 @@ export default function AdminPage() {
     if (!pool || !selectedSquare) return;
     const res = await fetch(`/api/admin/pools/${pool.id}/squares`, {
       method: 'PATCH',
-      headers: authHeaders,
+      headers: JSON_HEADERS,
       body: JSON.stringify({
         row_index: selectedSquare.row_index,
         col_index: selectedSquare.col_index,
@@ -234,8 +236,11 @@ export default function AdminPage() {
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? 'Failed to assign square');
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, 'Failed to assign square'));
       return;
     }
 
@@ -258,13 +263,15 @@ export default function AdminPage() {
         : `/api/admin/pool/${pool.id}/digits/${action}`;
 
     const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: authHeaders
+      method: 'POST'
     });
 
     if (!res.ok) {
-      const error = await res.json();
-      setMessage(error.error ?? `Failed to ${action} digits`);
+      if (res.status === 401 || res.status === 403) {
+        window.location.href = '/admin/login';
+        return;
+      }
+      setMessage(await readErrorMessage(res, `Failed to ${action} digits`));
       return;
     }
 
@@ -273,33 +280,29 @@ export default function AdminPage() {
     setMessage(`${action} complete.`);
   };
 
+  if (!sessionReady) {
+    return (
+      <main>
+        <section className="panel">
+          <p>Checking admin session...</p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main>
       <header>
         <span className="badge">Admin</span>
         <h1>Pool Admin</h1>
         <p>Manage participants and assign squares.</p>
-      </header>
-
-      <section className="panel">
-        <h2>Admin Session</h2>
-        <p>Sign in at `/admin/login`, then use the access token for admin API access.</p>
         <div className="form-row">
-          <input
-            type="password"
-            placeholder="Supabase access token"
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-          />
-          <button type="button" onClick={handleSaveToken}>
-            Save Session
-          </button>
-          <a className="button-link" href="/admin/login">
-            Login
+          <a className="button-link button-secondary" href="/admin/login">
+            Switch Account
           </a>
+          <AdminLogoutButton className="button-secondary" />
         </div>
-        <p className="hint">Token must belong to a Supabase user with admin role metadata.</p>
-      </section>
+      </header>
 
       {message && <div className="message">{message}</div>}
 

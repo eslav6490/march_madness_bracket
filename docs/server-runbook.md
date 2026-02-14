@@ -26,8 +26,7 @@ cat > /root/march_madness_bracket/.env.local <<'EOF'
 DATABASE_URL=postgres://mmapp:mmapp_dev@127.0.0.1:5432/march_madness
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+ADMIN_SESSION_SECRET=replace-with-a-long-random-secret
 # Optional legacy fallback for local/testing only:
 # ADMIN_TOKEN=dev-admin
 EOF
@@ -114,3 +113,11 @@ Then browse:
 ```text
 http://localhost:3000/
 ```
+
+## 7) Verify Admin Login/Logout (Cookie Session)
+
+1. Open `http://<server-ip>:3000/admin/login`.
+2. Sign in with a Supabase admin user.
+3. Confirm redirect to `/admin` and that admin actions work without manual token entry.
+4. Click `Logout` on an admin page, then verify you are sent back to `/admin/login`.
+5. Re-open `/admin`; you should be redirected to `/admin/login` until signing in again.
