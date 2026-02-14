@@ -652,7 +652,6 @@ export default function AdminPage() {
                         setAssignParticipantId(square.participant_id ?? '');
                       }}
                     >
-                      <span>Row {rowIndex}, Col {colIndex}</span>
                       <strong>{label}</strong>
                     </button>
                   );

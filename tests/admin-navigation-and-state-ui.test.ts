@@ -95,3 +95,25 @@ describe('FEAT-019/020 responsive grid + admin participant tools', () => {
     expect(adminSource).toContain('cell--dimmed');
   });
 });
+
+describe('grid label cleanup and audit pagination stability', () => {
+  it('removes per-square row/col labels from public and admin grids', async () => {
+    const homeSource = await fs.promises.readFile('/root/march_madness_bracket/app/page.tsx', 'utf8');
+    const adminSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/page.tsx', 'utf8');
+
+    expect(homeSource).not.toContain('<span>Row {rowIndex}, Col {colIndex}</span>');
+    expect(adminSource).not.toContain('<span>Row {rowIndex}, Col {colIndex}</span>');
+  });
+
+  it('uses stable cursor refs in audit pagination to avoid reset-load loops', async () => {
+    const auditSource = await fs.promises.readFile(
+      '/root/march_madness_bracket/app/admin/pool/[poolId]/audit/page.tsx',
+      'utf8'
+    );
+
+    expect(auditSource).toContain('const cursorRef = useRef<Cursor>(null);');
+    expect(auditSource).toContain("const useCursor = mode === 'more' ? cursorOverride ?? cursorRef.current : null;");
+    expect(auditSource).toContain('cursorRef.current = nextCursor;');
+    expect(auditSource).toContain("onClick={() => load('more')}");
+  });
+});
