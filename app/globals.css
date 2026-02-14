@@ -89,8 +89,23 @@ p {
   grid-template-columns: repeat(11, minmax(0, 1fr));
 }
 
+.grid--fixed {
+  grid-template-columns: repeat(11, minmax(64px, 1fr));
+  min-width: 792px;
+}
+
 .grid-row {
   display: contents;
+}
+
+.scroll-x {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 6px;
+  scrollbar-gutter: stable both-edges;
+  --scroll-fade: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 18px), transparent 100%);
+  -webkit-mask-image: var(--scroll-fade);
+  mask-image: var(--scroll-fade);
 }
 
 .cell {
@@ -117,6 +132,11 @@ p {
 .cell--active {
   border-color: var(--accent);
   transform: translateY(-2px);
+}
+
+.cell--dimmed {
+  opacity: 0.42;
+  box-shadow: none;
 }
 
 .cell span {
@@ -241,6 +261,23 @@ button:hover {
   color: var(--accent);
 }
 
+.checkbox-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.checkbox-control input {
+  min-width: auto;
+  margin: 0;
+}
+
+.participant-controls {
+  align-items: center;
+}
+
 .message {
   padding: 12px 16px;
   border-radius: 12px;
@@ -311,10 +348,39 @@ button:hover {
 
 .heatmap-grid {
   display: grid;
-  grid-template-columns: repeat(10, minmax(52px, 1fr));
+  grid-template-columns: repeat(10, minmax(64px, 1fr));
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+}
+
+.heatmap-grid--with-headers {
+  grid-template-columns: 72px repeat(10, minmax(64px, 1fr));
+  min-width: 792px;
+}
+
+.heatmap-grid-row {
+  display: contents;
+}
+
+.heatmap-header-cell {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--cell-border);
+  border-radius: 10px;
+  min-height: 58px;
+  padding: 8px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.heatmap-header-cell--corner {
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.heatmap-header-cell span {
+  font-size: 0.78rem;
+  color: var(--muted);
 }
 
 .heatmap-cell {
@@ -363,8 +429,11 @@ button:hover {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
+  .grid--fixed {
+    grid-template-columns: repeat(11, minmax(64px, 1fr));
+  }
+
   .heatmap-grid {
-    grid-template-columns: repeat(10, minmax(44px, 1fr));
     gap: 6px;
   }
 }

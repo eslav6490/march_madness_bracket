@@ -1,6 +1,7 @@
 import React from 'react';
 
 import { getDb } from '@/lib/db';
+import { getDigitMap, isDigitsVisible } from '@/lib/digits';
 import { getParticipantLeaderboard, getSquareStats } from '@/lib/analytics';
 import { PublicNav } from '@/components/public-nav';
 
@@ -14,10 +15,12 @@ const currency = new Intl.NumberFormat('en-US', {
 export default async function PoolAnalyticsPage({ params }: { params: { poolId: string } }) {
   const db = getDb();
   try {
-    const [squaresData, participantsData] = await Promise.all([
+    const [squaresData, participantsData, digitMap] = await Promise.all([
       getSquareStats(db, params.poolId),
-      getParticipantLeaderboard(db, params.poolId)
+      getParticipantLeaderboard(db, params.poolId),
+      getDigitMap(db, params.poolId)
     ]);
+    const showDigitHeaders = isDigitsVisible(digitMap);
 
     return (
       <main>
@@ -49,6 +52,10 @@ export default async function PoolAnalyticsPage({ params }: { params: { poolId: 
           totals={squaresData.totals}
           squares={squaresData.squares}
           leaderboard={participantsData.leaderboard}
+          hasDigitMap={Boolean(digitMap)}
+          showDigitHeaders={showDigitHeaders}
+          winningDigits={digitMap?.winning_digits ?? []}
+          losingDigits={digitMap?.losing_digits ?? []}
         />
       </main>
     );

@@ -62,6 +62,36 @@ describe('public analytics page', () => {
     expect(html).toContain('Heatmap');
     expect(html).toContain('Participant Leaderboard');
     expect(html).toContain('Bob');
+    expect(html).toContain('role="columnheader"><strong>2</strong><span>Col 2</span>');
+    expect(html).toContain('role="rowheader"><strong>2</strong><span>Row 2</span>');
+  });
+
+  it('shows hidden digit headers as ? until reveal/lock', async () => {
+    const poolId = await createPoolWithSquares(db, 'Analytics Hidden Digits');
+    await upsertDigitMap(db, poolId, [9, 8, 7, 6, 5, 4, 3, 2, 1, 0], [1, 0, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+    vi.doMock('@/lib/db', () => ({ getDb: () => db }));
+    const { default: Page } = await import('../app/pool/[poolId]/analytics/page');
+
+    const jsx = await Page({ params: { poolId } });
+    const html = renderToStaticMarkup(jsx as any);
+
+    expect(html).toContain('Digit headers are hidden until digits are revealed.');
+    expect(html).toContain('role="columnheader"><strong>?</strong><span>Col 0</span>');
+    expect(html).toContain('role="rowheader"><strong>?</strong><span>Row 0</span>');
+  });
+
+  it('shows placeholder digit header hint when no digit map exists', async () => {
+    const poolId = await createPoolWithSquares(db, 'Analytics Missing Digits');
+
+    vi.doMock('@/lib/db', () => ({ getDb: () => db }));
+    const { default: Page } = await import('../app/pool/[poolId]/analytics/page');
+
+    const jsx = await Page({ params: { poolId } });
+    const html = renderToStaticMarkup(jsx as any);
+
+    expect(html).toContain('Digit headers use ? until digits are randomized.');
+    expect(html).toContain('role="columnheader"><strong>?</strong><span>Col 0</span>');
+    expect(html).toContain('role="rowheader"><strong>?</strong><span>Row 0</span>');
   });
 });
-

@@ -60,3 +60,38 @@ describe('FEAT-017/018 admin lock gating and loading UX', () => {
     expect(auditSource).toContain('Loading More...');
   });
 });
+
+describe('FEAT-019/020 responsive grid + admin participant tools', () => {
+  it('uses horizontal scroll wrappers and analytics digit headers for public views', async () => {
+    const homeSource = await fs.promises.readFile('/root/march_madness_bracket/app/page.tsx', 'utf8');
+    const analyticsSource = await fs.promises.readFile(
+      '/root/march_madness_bracket/app/pool/[poolId]/analytics/analytics-client.tsx',
+      'utf8'
+    );
+    const cssSource = await fs.promises.readFile('/root/march_madness_bracket/app/globals.css', 'utf8');
+
+    expect(homeSource).toContain('className="scroll-x"');
+    expect(homeSource).toContain('grid--fixed');
+    expect(analyticsSource).toContain('heatmap-grid--with-headers');
+    expect(analyticsSource).toContain('role="columnheader"');
+    expect(analyticsSource).toContain('role="rowheader"');
+    expect(cssSource).toContain('.scroll-x');
+    expect(cssSource).toContain('.grid--fixed');
+    expect(cssSource).toContain('.heatmap-header-cell');
+  });
+
+  it('adds participant search/filter/sort controls and unassigned-squares mode in admin', async () => {
+    const adminSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/page.tsx', 'utf8');
+
+    expect(adminSource).toContain('placeholder="Search participants"');
+    expect(adminSource).toContain('Name A→Z');
+    expect(adminSource).toContain('Name Z→A');
+    expect(adminSource).toContain('Squares descending');
+    expect(adminSource).toContain('Squares ascending');
+    expect(adminSource).toContain('Show only participants with 0 squares');
+    expect(adminSource).toContain('participants shown');
+    expect(adminSource).toContain('Show only unassigned squares');
+    expect(adminSource).toContain('unassigned squares remaining');
+    expect(adminSource).toContain('cell--dimmed');
+  });
+});
