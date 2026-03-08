@@ -4,14 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { requireAdmin } from '@/lib/admin';
 import { encodeAdminSession } from '@/lib/admin-session';
 
-const AUTH_ENV_KEYS = [
-  'ADMIN_TOKEN',
-  'ADMIN_SESSION_SECRET',
-  'SUPABASE_URL',
-  'SUPABASE_ANON_KEY',
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY'
-] as const;
+const AUTH_ENV_KEYS = ['ADMIN_TOKEN', 'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'ADMIN_SESSION_SECRET'] as const;
 
 function resetAuthEnv() {
   for (const key of AUTH_ENV_KEYS) {
@@ -101,56 +94,13 @@ describe('admin guard', () => {
     expect(response?.headers.get('set-cookie')).toContain('admin_session=');
   });
 
-  it('allows requests with a Supabase bearer token for admin users', async () => {
-    process.env.SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_ANON_KEY = 'anon-key';
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ app_metadata: { roles: ['admin'] } }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' }
-      })
-    );
-    vi.stubGlobal('fetch', fetchMock);
+  it('blocks requests without a session even when credentials are configured', async () => {
+    process.env.ADMIN_EMAIL = 'admin@example.com';
+    process.env.ADMIN_PASSWORD = 'password';
 
-    const request = new Request('http://localhost/api/admin/test', {
-      headers: {
-        Authorization: 'Bearer supabase-token'
-      }
-    });
-
+    const request = new Request('http://localhost/api/admin/test');
     const response = await requireAdmin(request);
-    expect(response).toBeNull();
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://example.supabase.co/auth/v1/user',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          apikey: 'anon-key',
-          authorization: 'Bearer supabase-token'
-        })
-      })
-    );
-  });
 
-  it('blocks Supabase-authenticated non-admin users', async () => {
-    process.env.SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_ANON_KEY = 'anon-key';
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ app_metadata: { roles: ['viewer'] } }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
-        })
-      )
-    );
-
-    const request = new Request('http://localhost/api/admin/test', {
-      headers: {
-        Authorization: 'Bearer supabase-token'
-      }
-    });
-
-    const response = await requireAdmin(request);
     expect(response?.status).toBe(403);
   });
 });

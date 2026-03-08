@@ -5,11 +5,10 @@ import { encodeAdminSession } from '@/lib/admin-session';
 
 const AUTH_ENV_KEYS = [
   'ADMIN_TOKEN',
+  'ADMIN_EMAIL',
+  'ADMIN_PASSWORD',
   'ADMIN_SESSION_SECRET',
-  'SUPABASE_URL',
-  'SUPABASE_ANON_KEY',
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY'
+  'ADMIN_SESSION_TTL_SECONDS'
 ] as const;
 
 function resetAuthEnv() {
@@ -31,33 +30,8 @@ describe('admin auth routes', () => {
 
   it('login sets an admin session cookie for valid admin credentials', async () => {
     process.env.ADMIN_SESSION_SECRET = 'test-session-secret';
-    process.env.SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_ANON_KEY = 'anon-key';
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url.endsWith('/auth/v1/token?grant_type=password')) {
-        return new Response(
-          JSON.stringify({
-            access_token: 'supabase-access-token',
-            expires_in: 3600,
-            user: { id: 'admin-user-id' }
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } }
-        );
-      }
-      if (url.endsWith('/auth/v1/user')) {
-        return new Response(JSON.stringify({ app_metadata: { roles: ['admin'] } }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' }
-        });
-      }
-      return new Response(JSON.stringify({ error: 'not found' }), {
-        status: 404,
-        headers: { 'content-type': 'application/json' }
-      });
-    });
-    vi.stubGlobal('fetch', fetchMock);
+    process.env.ADMIN_EMAIL = 'admin@example.com';
+    process.env.ADMIN_PASSWORD = 'passw0rd';
 
     const { POST } = await import('../app/api/admin/auth/login/route');
     const response = await POST(
@@ -76,27 +50,12 @@ describe('admin auth routes', () => {
 
     const body = (await response.json()) as { authenticated: boolean };
     expect(body.authenticated).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('login rejects invalid credentials', async () => {
     process.env.ADMIN_SESSION_SECRET = 'test-session-secret';
-    process.env.SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_ANON_KEY = 'anon-key';
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith('/auth/v1/token?grant_type=password')) {
-          return new Response(JSON.stringify({ msg: 'invalid login' }), {
-            status: 400,
-            headers: { 'content-type': 'application/json' }
-          });
-        }
-        return new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } });
-      })
-    );
+    process.env.ADMIN_EMAIL = 'admin@example.com';
+    process.env.ADMIN_PASSWORD = 'passw0rd';
 
     const { POST } = await import('../app/api/admin/auth/login/route');
     const response = await POST(
@@ -111,46 +70,19 @@ describe('admin auth routes', () => {
     expect(response.headers.get('set-cookie')).toBeNull();
   });
 
-  it('login blocks non-admin users', async () => {
+  it('login rejects when admin credentials are not configured', async () => {
     process.env.ADMIN_SESSION_SECRET = 'test-session-secret';
-    process.env.SUPABASE_URL = 'https://example.supabase.co';
-    process.env.SUPABASE_ANON_KEY = 'anon-key';
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        if (url.endsWith('/auth/v1/token?grant_type=password')) {
-          return new Response(
-            JSON.stringify({
-              access_token: 'supabase-access-token',
-              expires_in: 3600,
-              user: { id: 'non-admin-user-id' }
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } }
-          );
-        }
-        if (url.endsWith('/auth/v1/user')) {
-          return new Response(JSON.stringify({ app_metadata: { roles: ['viewer'] } }), {
-            status: 200,
-            headers: { 'content-type': 'application/json' }
-          });
-        }
-        return new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } });
-      })
-    );
 
     const { POST } = await import('../app/api/admin/auth/login/route');
     const response = await POST(
       new Request('http://localhost/api/admin/auth/login', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: 'viewer@example.com', password: 'passw0rd' })
+        body: JSON.stringify({ email: 'admin@example.com', password: 'passw0rd' })
       })
     );
 
-    expect(response.status).toBe(403);
-    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(response.status).toBe(401);
   });
 
   it('logout clears the admin session cookie', async () => {

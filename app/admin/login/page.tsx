@@ -64,7 +64,7 @@ export default function AdminLoginPage() {
       <header>
         <span className="badge">Admin</span>
         <h1>Admin Login</h1>
-        <p>Sign in with Supabase credentials for an admin user.</p>
+        <p>Sign in with your configured admin email and password.</p>
       </header>
 
       <section className="panel">
