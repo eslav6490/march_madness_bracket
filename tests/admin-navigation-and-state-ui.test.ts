@@ -1,5 +1,6 @@
 /// <reference types="vitest" />
 import fs from 'fs';
+import path from 'path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -7,6 +8,12 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { AdminPoolNav } from '@/components/admin-pool-nav';
+
+const repoPath = process.cwd();
+
+function fromRepo(relativePath: string) {
+  return path.join(repoPath, relativePath);
+}
 
 describe('FEAT-016 admin pool navigation', () => {
   it('renders breadcrumb and pool-aware subnav with active state', () => {
@@ -21,9 +28,9 @@ describe('FEAT-016 admin pool navigation', () => {
   });
 
   it('uses shared admin pool nav on games/payouts/audit pages', async () => {
-    const gamesSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/pool/[poolId]/games/page.tsx', 'utf8');
-    const payoutsSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/pool/[poolId]/payouts/page.tsx', 'utf8');
-    const auditSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/pool/[poolId]/audit/page.tsx', 'utf8');
+    const gamesSource = await fs.promises.readFile(fromRepo('app/admin/pool/[poolId]/games/page.tsx'), 'utf8');
+    const payoutsSource = await fs.promises.readFile(fromRepo('app/admin/pool/[poolId]/payouts/page.tsx'), 'utf8');
+    const auditSource = await fs.promises.readFile(fromRepo('app/admin/pool/[poolId]/audit/page.tsx'), 'utf8');
 
     expect(gamesSource).toContain('<AdminPoolNav poolId={params.poolId} activeKey="games" />');
     expect(payoutsSource).toContain('<AdminPoolNav poolId={params.poolId} activeKey="payouts" />');
@@ -33,10 +40,10 @@ describe('FEAT-016 admin pool navigation', () => {
 
 describe('FEAT-017/018 admin lock gating and loading UX', () => {
   it('includes lock-state reason text and loading/busy states on admin pages', async () => {
-    const adminSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/page.tsx', 'utf8');
-    const gamesSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/pool/[poolId]/games/page.tsx', 'utf8');
-    const payoutsSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/pool/[poolId]/payouts/page.tsx', 'utf8');
-    const auditSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/pool/[poolId]/audit/page.tsx', 'utf8');
+    const adminSource = await fs.promises.readFile(fromRepo('app/admin/page.tsx'), 'utf8');
+    const gamesSource = await fs.promises.readFile(fromRepo('app/admin/pool/[poolId]/games/page.tsx'), 'utf8');
+    const payoutsSource = await fs.promises.readFile(fromRepo('app/admin/pool/[poolId]/payouts/page.tsx'), 'utf8');
+    const auditSource = await fs.promises.readFile(fromRepo('app/admin/pool/[poolId]/audit/page.tsx'), 'utf8');
 
     expect(adminSource).toContain('Pool Status');
     expect(adminSource).toContain('Pool is locked; participants cannot be changed.');
@@ -63,12 +70,9 @@ describe('FEAT-017/018 admin lock gating and loading UX', () => {
 
 describe('FEAT-019/020 responsive grid + admin participant tools', () => {
   it('uses horizontal scroll wrappers and analytics digit headers for public views', async () => {
-    const homeSource = await fs.promises.readFile('/root/march_madness_bracket/app/page.tsx', 'utf8');
-    const analyticsSource = await fs.promises.readFile(
-      '/root/march_madness_bracket/app/pool/[poolId]/analytics/analytics-client.tsx',
-      'utf8'
-    );
-    const cssSource = await fs.promises.readFile('/root/march_madness_bracket/app/globals.css', 'utf8');
+    const homeSource = await fs.promises.readFile(fromRepo('app/page.tsx'), 'utf8');
+    const analyticsSource = await fs.promises.readFile(fromRepo('app/pool/[poolId]/analytics/analytics-client.tsx'), 'utf8');
+    const cssSource = await fs.promises.readFile(fromRepo('app/globals.css'), 'utf8');
 
     expect(homeSource).toContain('className="scroll-x"');
     expect(homeSource).toContain('grid--fixed');
@@ -81,7 +85,7 @@ describe('FEAT-019/020 responsive grid + admin participant tools', () => {
   });
 
   it('adds participant search/filter/sort controls and unassigned-squares mode in admin', async () => {
-    const adminSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/page.tsx', 'utf8');
+    const adminSource = await fs.promises.readFile(fromRepo('app/admin/page.tsx'), 'utf8');
 
     expect(adminSource).toContain('placeholder="Search participants"');
     expect(adminSource).toContain('Name A→Z');
@@ -98,18 +102,15 @@ describe('FEAT-019/020 responsive grid + admin participant tools', () => {
 
 describe('grid label cleanup and audit pagination stability', () => {
   it('removes per-square row/col labels from public and admin grids', async () => {
-    const homeSource = await fs.promises.readFile('/root/march_madness_bracket/app/page.tsx', 'utf8');
-    const adminSource = await fs.promises.readFile('/root/march_madness_bracket/app/admin/page.tsx', 'utf8');
+    const homeSource = await fs.promises.readFile(fromRepo('app/page.tsx'), 'utf8');
+    const adminSource = await fs.promises.readFile(fromRepo('app/admin/page.tsx'), 'utf8');
 
     expect(homeSource).not.toContain('<span>Row {rowIndex}, Col {colIndex}</span>');
     expect(adminSource).not.toContain('<span>Row {rowIndex}, Col {colIndex}</span>');
   });
 
   it('uses stable cursor refs in audit pagination to avoid reset-load loops', async () => {
-    const auditSource = await fs.promises.readFile(
-      '/root/march_madness_bracket/app/admin/pool/[poolId]/audit/page.tsx',
-      'utf8'
-    );
+    const auditSource = await fs.promises.readFile(fromRepo('app/admin/pool/[poolId]/audit/page.tsx'), 'utf8');
 
     expect(auditSource).toContain('const cursorRef = useRef<Cursor>(null);');
     expect(auditSource).toContain("const useCursor = mode === 'more' ? cursorOverride ?? cursorRef.current : null;");

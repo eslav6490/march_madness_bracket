@@ -1,15 +1,7 @@
 import { NextResponse } from 'next/server';
 
-import { AUTH_NO_STORE_HEADERS, validateSupabaseAdminToken } from '@/lib/admin';
+import { AUTH_NO_STORE_HEADERS, validateConfiguredAdminCredentials } from '@/lib/admin';
 import { setAdminSessionCookie } from '@/lib/admin-session';
-
-type PasswordGrantResponse = {
-  access_token?: unknown;
-  expires_in?: unknown;
-  user?: {
-    id?: unknown;
-  } | null;
-};
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status, headers: AUTH_NO_STORE_HEADERS });
@@ -25,13 +17,6 @@ function parsePositiveInt(value: unknown, fallback: number) {
 }
 
 export async function POST(request: Request) {
-  const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
-    return jsonError('Supabase auth not configured', 500);
-  }
-
   let email = '';
   let password = '';
 
@@ -47,43 +32,14 @@ export async function POST(request: Request) {
     return jsonError('Email and password are required', 400);
   }
 
-  const grantResponse = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      apikey: supabaseAnonKey,
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify({ email, password }),
-    cache: 'no-store'
-  });
-
-  let grantBody: PasswordGrantResponse = {};
-  try {
-    grantBody = (await grantResponse.json()) as PasswordGrantResponse;
-  } catch {
-    grantBody = {};
-  }
-
-  const accessToken = typeof grantBody.access_token === 'string' ? grantBody.access_token : '';
-  if (!grantResponse.ok || !accessToken) {
+  if (!validateConfiguredAdminCredentials(email, password)) {
     return jsonError('Invalid email or password', 401);
   }
 
-  const adminValidation = await validateSupabaseAdminToken(accessToken);
-  if (adminValidation) {
-    if (adminValidation.status === 500) return adminValidation;
-    return jsonError('Forbidden', 403);
-  }
-
-  const userId = typeof grantBody.user?.id === 'string' ? grantBody.user.id : '';
-  if (!userId) {
-    return jsonError('Invalid auth response', 502);
-  }
-
-  const expiresIn = parsePositiveInt(grantBody.expires_in, 60 * 60);
   const response = NextResponse.json({ authenticated: true }, { status: 200, headers: AUTH_NO_STORE_HEADERS });
+  const expiresIn = parsePositiveInt(process.env.ADMIN_SESSION_TTL_SECONDS, 60 * 60 * 24 * 7);
   const cookieWasSet = setAdminSessionCookie(response, {
-    sub: userId,
+    sub: email.toLowerCase(),
     exp: Math.floor(Date.now() / 1000) + expiresIn,
     role_snapshot: 'admin'
   });
